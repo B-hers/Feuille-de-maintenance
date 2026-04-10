@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Maintenance Onduleur — We Green Energy</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f4f4f0;color:#1a1a1a;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:13px;padding:6px 10px;border:1px solid #d0d0c8;border-radius:6px;background:#fff;color:#1a1a1a;outline:none;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{border-color:#1B6B3A}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+button{font-family:inherit;cursor:pointer}
+@media print{
+  @page{size:A4 portrait;margin:12mm 14mm}
+  body{background:white}
+  #no-print{display:none!important}
+  #preview-doc{display:block!important;padding:0!important;max-width:100%!important}
+  .preview-table{font-size:11px}
+  .page-break{page-break-before:always}
+}
+.preview-table{width:100%;border-collapse:collapse;font-size:13px}
+.preview-table td,.preview-table th{padding:5px 9px;border:.5px solid #ccc}
+.preview-table th{background:#f0f7f2;font-weight:600;text-align:left;color:#1B6B3A;width:38%}
+.meas-table{width:100%;border-collapse:collapse;font-size:12px}
+.meas-table th{background:#1B6B3A;color:#fff;padding:6px 10px;text-align:left;font-weight:600}
+.meas-table td{border:.5px solid #d0d0c8;padding:4px 8px}
+.meas-table tr:nth-child(even) td{background:#f8faf8}
+@media(max-width:640px){
+  body{font-size:15px}
+  input,select,textarea{font-size:16px!important;padding:11px 12px;border-radius:8px;width:100%}
+  button{min-height:44px}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+const GREEN="#1B6B3A", GREEN_LIGHT="#f0f7f2", GREEN_MID="#d4ead9";
+const BORDER="#d0d0c8", BG="#f4f4f0", WHITE="#ffffff", MUTED="#666660";
+const RED="#c0392b", BLUE="#2980b9", ORANGE="#e07b00";
+
+const CARD={background:WHITE,border:`1px solid ${BORDER}`,borderRadius:10,padding:"1rem 1.25rem"};
+const SH={fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.07em",
+  paddingBottom:8,borderBottom:`1px solid ${GREEN_MID}`,marginBottom:14};
+const LBL={fontSize:12,color:MUTED,fontWeight:500,marginBottom:4,display:"block"};
+const G2={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:12};
+
+const SUPA_URL="https://brodjywccrirlzplovxg.supabase.co";
+const SUPA_KEY="sb_publishable_T4Syy3Nq5mLK0yqOUNgtEg_od2WUXEY";
+
+async function supaLoad(ref){
+  try{
+    const res=await fetch(SUPA_URL+"/rest/v1/maintenance_onduleur?ref=eq."+encodeURIComponent(ref)+"&select=data,updated_at",
+      {headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY}});
+    const rows=await res.json();
+    if(rows&&rows.length>0)return rows[0];
+  }catch(e){}
+  return null;
+}
+async function supaSave(ref,data){
+  try{
+    await fetch(SUPA_URL+"/rest/v1/maintenance_onduleur",{
+      method:"POST",
+      headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,
+        "Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},
+      body:JSON.stringify({ref,data,updated_at:new Date().toISOString()})
+    });
+    return true;
+  }catch(e){return false;}
+}
+
+// ── Field ──────────────────────────────────────────────────────────────────
+const Field=function(props){
+  var label=props.label, value=props.value, onChange=props.onChange;
+  var placeholder=props.placeholder||"", type=props.type||"text", unit=props.unit;
+  return(
+    <div>
+      {label&&<label style={LBL}>{label}</label>}
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <input type={type} value={value} onChange={function(e){onChange(e.target.value);}}
+          placeholder={placeholder} style={{flex:1,minWidth:0}}/>
+        {unit&&<span style={{fontSize:12,color:MUTED,whiteSpace:"nowrap"}}>{unit}</span>}
+      </div>
+    </div>
+  );
+};
+
+// ── Photo zone (single image for fiche signalétique, multi for reports) ────
+function PhotoZone(props){
+  var label=props.label, items=props.items, onAdd=props.onAdd, onDelete=props.onDelete;
+  var single=props.single||false;
+  var [drag,setDrag]=useState(false);
+  var refFile=useRef(), refCam=useRef(), zoneRef=useRef();
+  var isMob=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  var compress=function(blob){return new Promise(function(res){
+    var img=new Image(), url=URL.createObjectURL(blob);
+    img.onload=function(){
+      var MAX=1000,w=img.width,h=img.height;
+      if(w>h){if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}}
+      else{if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}}
+      var c=document.createElement("canvas");c.width=w;c.height=h;
+      var ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.72));
+    };
+    img.onerror=function(){URL.revokeObjectURL(url);res(null);};
+    img.src=url;
+  });};
+
+  var handleFiles=async function(files){
+    var arr=Array.from(files).filter(function(f){return f.type.startsWith("image/");});
+    if(single)arr=arr.slice(0,1);
+    var result=[];
+    for(var i=0;i<arr.length;i++){
+      var url=await compress(arr[i]);
+      result.push({name:arr[i].name,url:url});
+    }
+    onAdd(result);
+  };
+
+  var handlePaste=async function(e){
+    var imgs=Array.from((e.clipboardData&&e.clipboardData.items)||[]).filter(function(i){return i.type.startsWith("image/");});
+    if(!imgs.length)return; e.preventDefault();
+    var result=[];
+    for(var i=0;i<(single?1:imgs.length);i++){
+      var url=await compress(imgs[i].getAsFile());
+      result.push({name:"colle.jpg",url:url});
+    }
+    onAdd(result);
+  };
+
+  var showItems=single?items.slice(0,1):items;
+
+  return(
+    <div>
+      {label&&<div style={{...LBL,marginBottom:5}}>
+        {label}{!single&&items.length>0&&<span style={{color:GREEN,fontWeight:600}}> ({items.length})</span>}
+      </div>}
+      <div ref={zoneRef} tabIndex={0} onPaste={handlePaste}
+        onDragOver={function(e){e.preventDefault();setDrag(true);}}
+        onDragLeave={function(){setDrag(false);}}
+        onDrop={function(e){e.preventDefault();setDrag(false);handleFiles(e.dataTransfer.files);}}
+        style={{border:`1.5px dashed ${drag?GREEN:BORDER}`,background:drag?GREEN_LIGHT:BG,
+          borderRadius:8,padding:8,minHeight:single?90:56,outline:"none"}}>
+        {isMob&&(!single||items.length===0)&&(
+          <div style={{display:"flex",gap:8,marginBottom:items.length?8:0}}>
+            <button onClick={function(){refCam.current&&refCam.current.click();}}
+              style={{flex:1,background:GREEN,color:WHITE,border:"none",borderRadius:8,padding:"8px",fontSize:13,fontWeight:600}}>
+              {single?"📷 Fiche":"📷 Photo"}
+            </button>
+            <button onClick={function(){refFile.current&&refFile.current.click();}}
+              style={{flex:1,background:WHITE,color:GREEN,border:`1.5px solid ${GREEN}`,borderRadius:8,padding:"8px",fontSize:13,fontWeight:600}}>
+              🖼 Galerie
+            </button>
+          </div>
+        )}
+        {!isMob&&showItems.length===0&&(
+          <div style={{height:single?74:40,display:"flex",flexDirection:single?"column":"row",
+            alignItems:"center",justifyContent:"center",gap:8,color:MUTED}}>
+            {single&&<span style={{fontSize:22}}>📷</span>}
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <span onClick={function(){refFile.current&&refFile.current.click();}}
+                style={{fontSize:12,color:GREEN,cursor:"pointer",textDecoration:"underline"}}>Parcourir</span>
+              <span style={{fontSize:12,color:"#ccc"}}>|</span>
+              <span style={{fontSize:12,color:"#aaa"}}>Drop / Ctrl+V</span>
+            </div>
+          </div>
+        )}
+        {showItems.length>0&&(
+          <div style={{display:"flex",flexWrap:single?"nowrap":"wrap",gap:6}}>
+            {showItems.map(function(item,i){
+              var sz=single?80:60;
+              return(
+                <div key={i} style={{position:"relative",flexShrink:0}}>
+                  <img src={item.url} alt={item.name}
+                    style={{width:sz,height:sz,objectFit:"cover",borderRadius:6,
+                      border:`1px solid ${BORDER}`,display:"block"}}/>
+                  <button onClick={function(){onDelete(i);}}
+                    style={{position:"absolute",top:-6,right:-6,width:18,height:18,borderRadius:"50%",
+                      background:"#e74c3c",color:WHITE,border:"none",cursor:"pointer",fontSize:11,
+                      display:"flex",alignItems:"center",justifyContent:"center"}}>x</button>
+                </div>
+              );
+            })}
+            {!single&&(
+              <div onClick={function(){refFile.current&&refFile.current.click();}}
+                style={{width:60,height:60,display:"flex",alignItems:"center",justifyContent:"center",
+                  border:`1.5px dashed ${BORDER}`,borderRadius:6,cursor:"pointer",fontSize:20,color:MUTED}}>+</div>
+            )}
+            {single&&items.length===0&&isMob&&null}
+          </div>
+        )}
+      </div>
+      <input ref={refCam} type="file" multiple={!single} accept="image/*" capture="environment"
+        style={{display:"none"}} onChange={function(e){handleFiles(e.target.files);}}/>
+      <input ref={refFile} type="file" multiple={!single} accept="image/*,.heic,.heif"
+        style={{display:"none"}} onChange={function(e){handleFiles(e.target.files);}}/>
+    </div>
+  );
+}
+
+// ── Rapport erreur par onduleur ────────────────────────────────────────────
+function RapportOnduleur(props){
+  var idx=props.idx, ond=props.ond, onChange=props.onChange, onDelete=props.onDelete;
+  var [open,setOpen]=useState(true);
+
+  var set=function(k,v){onChange({...ond,[k]:v});};
+  var setEr=function(k,v){onChange({...ond,erreur:{...ond.erreur,[k]:v}});};
+
+  var hasData=ond.modele||ond.serie||ond.erreur.description||ond.erreur.code;
+  var borderCol=ond.erreur.description?ORANGE:BORDER;
+
+  return(
+    <div style={{border:`1.5px solid ${borderCol}`,borderRadius:10,overflow:"hidden",marginBottom:12}}>
+      {/* Header row */}
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",
+        background:open?GREEN_LIGHT:WHITE,cursor:"pointer",borderBottom:open?`1px solid ${GREEN_MID}`:"none"}}
+        onClick={function(){setOpen(!open);}}>
+        <div style={{width:28,height:28,borderRadius:"50%",background:GREEN,color:WHITE,
+          display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,flexShrink:0}}>
+          {idx+1}
+        </div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:600,color:open?GREEN:"#1a1a1a"}}>
+            {ond.modele||"Onduleur "+(idx+1)}
+            {ond.serie&&<span style={{fontSize:12,fontWeight:400,color:MUTED,marginLeft:8}}>S/N: {ond.serie}</span>}
+          </div>
+          {ond.erreur.code&&<div style={{fontSize:11,color:ORANGE,marginTop:1}}>Code: {ond.erreur.code}</div>}
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {ond.erreur.redemarrage&&<span style={{fontSize:10,background:GREEN,color:WHITE,borderRadius:4,padding:"1px 6px",fontWeight:600}}>✓ Reboot</span>}
+          <span style={{fontSize:16,color:MUTED,transform:open?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</span>
+          <button onClick={function(e){e.stopPropagation();onDelete();}}
+            style={{fontSize:18,color:"#ccc",background:"none",border:"none",cursor:"pointer",lineHeight:1,padding:"0 2px"}}
+            title="Supprimer cet onduleur">x</button>
+        </div>
+      </div>
+
+      {open&&(
+        <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
+
+          {/* Identification + fiche signalétique */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:14,alignItems:"start"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <div style={G2}>
+                <Field label="Modèle" value={ond.modele} onChange={function(v){set("modele",v);}} placeholder="Ex: Deye SUN-8K-SG03LP1"/>
+                <Field label="Numéro de série" value={ond.serie} onChange={function(v){set("serie",v);}} placeholder="S/N…"/>
+              </div>
+              <Field label="Emplacement / repère" value={ond.emplacement||""} onChange={function(v){set("emplacement",v);}} placeholder="Ex: Local technique, salle des serveurs…"/>
+            </div>
+            <div style={{minWidth:100}}>
+              <div style={{fontSize:12,color:MUTED,fontWeight:500,marginBottom:4}}>Fiche signalétique</div>
+              <PhotoZone single={true} label="" items={ond.photoFiche||[]}
+                onAdd={function(items){set("photoFiche",(ond.photoFiche||[]).concat(items).slice(0,1));}}
+                onDelete={function(){set("photoFiche",[]);}}/>
+            </div>
+          </div>
+
+          <hr style={{border:"none",borderTop:`1px solid ${BORDER}`}}/>
+
+          {/* Rapport d'erreur */}
+          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:-4}}>
+            Rapport d'erreur
+          </div>
+
+          <div>
+            <label style={LBL}>a) Description du problème</label>
+            <textarea value={ond.erreur.description} onChange={function(e){setEr("description",e.target.value);}}
+              rows={3} style={{width:"100%",resize:"vertical"}} placeholder="Comportement anormal observé…"/>
+          </div>
+
+          <div>
+            <label style={LBL}>b) État des LEDs</label>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:8}}>
+              {[["ledVert","🟢 Vert (OK)",GREEN],["ledRouge","🔴 Rouge (Erreur)",RED],["ledBleu","🔵 Bleu (Comm.)",BLUE]].map(function(arr){
+                var k=arr[0],lbl=arr[1],col=arr[2];
+                return(
+                  <div key={k}>
+                    <label style={{...LBL,color:col}}>{lbl}</label>
+                    <input value={ond.erreur[k]||""} onChange={function(e){setEr(k,e.target.value);}}
+                      placeholder="État…" style={{width:"100%",borderColor:col}}/>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <Field label="c) Message / Code d'erreur onduleur" value={ond.erreur.code||""}
+            onChange={function(v){setEr("code",v);}} placeholder="Ex: E027, Grid fault…"/>
+
+          <div>
+            <label style={LBL}>d) Opérations déjà réalisées</label>
+            <textarea value={ond.erreur.operations||""} onChange={function(e){setEr("operations",e.target.value);}}
+              rows={2} style={{width:"100%",resize:"vertical"}} placeholder="Actions déjà tentées…"/>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,alignItems:"start"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <div onClick={function(){setEr("redemarrage",!ond.erreur.redemarrage);}}
+                style={{padding:"10px 14px",background:ond.erreur.redemarrage?GREEN_LIGHT:BG,
+                  border:`1px solid ${ond.erreur.redemarrage?GREEN_MID:BORDER}`,borderRadius:8,
+                  display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer"}}>
+                <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${ond.erreur.redemarrage?GREEN:BORDER}`,
+                  background:ond.erreur.redemarrage?GREEN:WHITE,display:"flex",alignItems:"center",
+                  justifyContent:"center",flexShrink:0,marginTop:1}}>
+                  {ond.erreur.redemarrage&&<span style={{color:WHITE,fontSize:12,fontWeight:700}}>✓</span>}
+                </div>
+                <div>
+                  <div style={{fontSize:13,fontWeight:600,color:ond.erreur.redemarrage?GREEN:"#1a1a1a"}}>e) Redémarrage attesté</div>
+                  <div style={{fontSize:11,color:MUTED,marginTop:2}}>DC OFF + AC déconnecté — &gt; 15 min</div>
+                </div>
+              </div>
+              <Field label="Version firmware (si MAJ)" value={ond.erreur.firmware||""}
+                onChange={function(v){setEr("firmware",v);}} placeholder="Ex: v1.42.00"/>
+            </div>
+            <PhotoZone label="Photos erreur / LEDs" items={ond.photosErreur||[]}
+              onAdd={function(items){set("photosErreur",(ond.photosErreur||[]).concat(items));}}
+              onDelete={function(i){set("photosErreur",(ond.photosErreur||[]).filter(function(_,idx){return idx!==i;}));}}/>
+          </div>
+
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Preview ────────────────────────────────────────────────────────────────
+function PreviewDoc(props){
+  var data=props.data;
+  var tv=function(v){return v||"—";};
+
+  return(
+    <div id="preview-doc" style={{maxWidth:720,margin:"0 auto",padding:"1rem .5rem",fontSize:13,color:"#1a1a1a",lineHeight:1.6}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",
+        marginBottom:20,paddingBottom:14,borderBottom:`2px solid ${GREEN}`}}>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.08em"}}>We Green Energy</div>
+          <div style={{fontSize:22,fontWeight:700}}>Rapport de maintenance onduleur</div>
+          <div style={{fontSize:12,color:MUTED,marginTop:2}}>Analyse de données — Mesures terrain</div>
+        </div>
+        <div style={{textAlign:"right",fontSize:12,color:MUTED}}>
+          <div style={{fontWeight:600,color:"#1a1a1a"}}>{tv(data.meta.date)}</div>
+          <div>{tv(data.meta.responsable)}</div>
+        </div>
+      </div>
+
+      {/* Identification projet */}
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>Identification du projet</div>
+        <table className="preview-table"><tbody>
+          <tr><th>Adresse du chantier</th><td>{tv(data.meta.adresse)}</td></tr>
+          <tr><th>Responsable</th><td>{tv(data.meta.responsable)}</td></tr>
+          <tr><th>Date d'intervention</th><td>{tv(data.meta.date)}</td></tr>
+          <tr><th>Onduleurs sur site</th><td>{data.onduleurs.length}</td></tr>
+        </tbody></table>
+      </div>
+
+      {/* AC */}
+      <div style={{...G2,marginBottom:16}}>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>Isolement AC</div>
+          <table className="preview-table"><tbody>
+            {[["L1/PE",data.ac.isol.l1pe],["L2/PE",data.ac.isol.l2pe],["L3/PE",data.ac.isol.l3pe],["N/PE",data.ac.isol.npe]].map(function(pair){
+              return <tr key={pair[0]}><th>{pair[0]}</th><td>{pair[1]?pair[1]+" MΩ":"—"}</td></tr>;
+            })}
+          </tbody></table>
+        </div>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>Voltage AC</div>
+          <table className="preview-table"><tbody>
+            {[["L1/N",data.ac.volt.l1n],["L2/N",data.ac.volt.l2n],["L3/N",data.ac.volt.l3n],
+              ["L1/PE",data.ac.volt.l1pe_v],["L2/PE",data.ac.volt.l2pe_v],["L3/PE",data.ac.volt.l3pe_v],
+              ["N/PE",data.ac.volt.npe_v],["L1/L2",data.ac.volt.l1l2],["L2/L3",data.ac.volt.l2l3],["L1/L3",data.ac.volt.l1l3]
+            ].map(function(pair){
+              return <tr key={pair[0]}><th>{pair[0]}</th><td>{pair[1]?pair[1]+" V":"—"}</td></tr>;
+            })}
+          </tbody></table>
+        </div>
+      </div>
+
+      {/* DC isolation */}
+      {data.strings.some(function(s){return s.isolNeg||s.isolPos;})&&(
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>Isolement DC</div>
+          <table className="meas-table">
+            <thead><tr><th>String</th><th>PE/− (MΩ)</th><th>PE/+ (MΩ)</th><th>Statut</th></tr></thead>
+            <tbody>
+              {data.strings.filter(function(s){return s.isolNeg||s.isolPos;}).map(function(s,i){
+                var ok=parseFloat(s.isolNeg)>=0.5&&parseFloat(s.isolPos)>=0.5;
+                return(
+                  <tr key={i}>
+                    <td style={{fontWeight:600}}>STR {s.num}</td>
+                    <td>{s.isolNeg||"—"}</td><td>{s.isolPos||"—"}</td>
+                    <td><span style={{fontSize:11,fontWeight:700,color:WHITE,
+                      background:(s.isolNeg&&s.isolPos)?(ok?GREEN:RED):"#aaa",borderRadius:4,padding:"1px 6px"}}>
+                      {(s.isolNeg&&s.isolPos)?(ok?"OK":"⚠"):"—"}
+                    </span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div style={{fontSize:11,color:MUTED,marginTop:4}}>Seuil : &gt; 0,5 MΩ = OK</div>
+        </div>
+      )}
+
+      {/* DC voltage */}
+      {data.strings.some(function(s){return s.voltEst||s.voltMes;})&&(
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>Voltage DC</div>
+          <table className="meas-table">
+            <thead><tr><th>String</th><th>Estimé (V)</th><th>Mesuré (V)</th><th>Écart</th></tr></thead>
+            <tbody>
+              {data.strings.filter(function(s){return s.voltEst||s.voltMes;}).map(function(s,i){
+                var est=parseFloat(s.voltEst), mes=parseFloat(s.voltMes);
+                var ecart=(!isNaN(est)&&!isNaN(mes)&&est!==0)?Math.abs((mes-est)/est*100).toFixed(1):null;
+                var warn=ecart&&parseFloat(ecart)>5;
+                return(
+                  <tr key={i}>
+                    <td style={{fontWeight:600}}>STR {s.num}</td>
+                    <td>{s.voltEst||"—"}</td><td>{s.voltMes||"—"}</td>
+                    <td>{ecart?<span style={{color:warn?RED:GREEN,fontWeight:600}}>{ecart}%{warn?" ⚠":" ✓"}</span>:"—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {data.ac.remarques&&<div style={{marginBottom:12,padding:"8px 12px",background:BG,borderRadius:6,border:`1px solid ${BORDER}`,fontSize:12}}><strong>Remarques AC :</strong> {data.ac.remarques}</div>}
+      {data.dcRemarques&&<div style={{marginBottom:12,padding:"8px 12px",background:BG,borderRadius:6,border:`1px solid ${BORDER}`,fontSize:12}}><strong>Remarques DC :</strong> {data.dcRemarques}</div>}
+
+      {/* Rapport par onduleur */}
+      {data.onduleurs.map(function(ond,idx){
+        return(
+          <div key={idx} className="page-break" style={{marginBottom:20}}>
+            <div style={{fontSize:13,fontWeight:700,color:WHITE,background:GREEN,
+              borderRadius:"8px 8px 0 0",padding:"8px 14px",display:"flex",alignItems:"center",gap:10}}>
+              <span style={{width:24,height:24,borderRadius:"50%",background:"rgba(255,255,255,0.25)",
+                display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700}}>
+                {idx+1}
+              </span>
+              <span>{ond.modele||"Onduleur "+(idx+1)}</span>
+              {ond.serie&&<span style={{fontSize:11,fontWeight:400,opacity:0.8}}>S/N: {ond.serie}</span>}
+            </div>
+            <div style={{border:`1px solid ${GREEN_MID}`,borderTop:"none",borderRadius:"0 0 8px 8px",padding:14}}>
+              {(ond.photoFiche&&ond.photoFiche.length>0||ond.emplacement)&&(
+                <div style={{display:"flex",gap:14,marginBottom:12,alignItems:"flex-start"}}>
+                  {ond.photoFiche&&ond.photoFiche.length>0&&(
+                    <img src={ond.photoFiche[0].url} alt="Fiche signalétique"
+                      style={{width:100,height:100,objectFit:"cover",borderRadius:6,border:`1px solid ${BORDER}`,flexShrink:0}}/>
+                  )}
+                  {ond.emplacement&&<div style={{fontSize:12,color:MUTED}}><strong>Emplacement :</strong> {ond.emplacement}</div>}
+                </div>
+              )}
+              <table className="preview-table"><tbody>
+                <tr><th>Description du problème</th><td style={{whiteSpace:"pre-wrap"}}>{ond.erreur.description||"—"}</td></tr>
+                <tr><th>LEDs</th><td>
+                  {ond.erreur.ledVert&&<span style={{marginRight:10,fontWeight:600,color:GREEN}}>● Vert: {ond.erreur.ledVert}</span>}
+                  {ond.erreur.ledRouge&&<span style={{marginRight:10,fontWeight:600,color:RED}}>● Rouge: {ond.erreur.ledRouge}</span>}
+                  {ond.erreur.ledBleu&&<span style={{fontWeight:600,color:BLUE}}>● Bleu: {ond.erreur.ledBleu}</span>}
+                  {!ond.erreur.ledVert&&!ond.erreur.ledRouge&&!ond.erreur.ledBleu&&"—"}
+                </td></tr>
+                <tr><th>Code / Message d'erreur</th><td>{ond.erreur.code||"—"}</td></tr>
+                <tr><th>Opérations réalisées</th><td style={{whiteSpace:"pre-wrap"}}>{ond.erreur.operations||"—"}</td></tr>
+                <tr><th>Redémarrage &gt;15 min</th>
+                  <td style={{fontWeight:600,color:ond.erreur.redemarrage?GREEN:MUTED}}>
+                    {ond.erreur.redemarrage?"✓ Attesté":"Non"}
+                  </td>
+                </tr>
+                {ond.erreur.firmware&&<tr><th>Firmware</th><td>{ond.erreur.firmware}</td></tr>}
+              </tbody></table>
+              {ond.photosErreur&&ond.photosErreur.length>0&&(
+                <div style={{marginTop:10}}>
+                  <div style={{fontSize:11,fontWeight:600,color:MUTED,marginBottom:6}}>Photos erreur / LEDs</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
+                    {ond.photosErreur.map(function(p,i){
+                      return <img key={i} src={p.url} alt={p.name} style={{width:"100%",aspectRatio:"4/3",objectFit:"cover",borderRadius:6,border:`1px solid ${BORDER}`}}/>;
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Photos AC/DC/générales */}
+      {[{key:"ac",label:"Photos AC"},{key:"dc",label:"Photos DC"},{key:"general",label:"Photos générales"}]
+        .filter(function(s){return data.photos[s.key]&&data.photos[s.key].length>0;})
+        .map(function(section){
+          return(
+            <div key={section.key} style={{marginBottom:16}}>
+              <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>{section.label}</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
+                {data.photos[section.key].map(function(p,i){
+                  return <img key={i} src={p.url} alt={p.name} style={{width:"100%",aspectRatio:"4/3",objectFit:"cover",borderRadius:6,border:`1px solid ${BORDER}`}}/>;
+                })}
+              </div>
+            </div>
+          );
+        })}
+    </div>
+  );
+}
+
+// ── App ────────────────────────────────────────────────────────────────────
+function mkOnd(n){
+  return{
+    id:Date.now()+n,
+    modele:"",serie:"",emplacement:"",
+    photoFiche:[],photosErreur:[],
+    erreur:{description:"",ledVert:"",ledRouge:"",ledBleu:"",code:"",operations:"",redemarrage:false,firmware:""}
+  };
+}
+
+function App(){
+  var [mode,setMode]=useState("form");
+  var [ref,setRef]=useState("");
+  var [saveStatus,setSaveStatus]=useState("");
+  var [lastSaved,setLastSaved]=useState(null);
+  var saveTimer=useRef(null);
+  var isLoading=useRef(false);
+
+  var [meta,setMeta]=useState({adresse:"",responsable:"",date:""});
+  var initAc={
+    isol:{l1pe:"",l2pe:"",l3pe:"",npe:""},
+    volt:{l1n:"",l2n:"",l3n:"",l1pe_v:"",l2pe_v:"",l3pe_v:"",npe_v:"",l1l2:"",l2l3:"",l1l3:""},
+    remarques:""
+  };
+  var [ac,setAc]=useState(initAc);
+  var mkStr=function(n){return{num:String(n),isolNeg:"",isolPos:"",voltEst:"",voltMes:""};};
+  var [strings,setStrings]=useState([1,2,3,4,5].map(mkStr));
+  var [dcRemarques,setDcRemarques]=useState("");
+  var [onduleurs,setOnduleurs]=useState([mkOnd(0)]);
+  var [photos,setPhotos]=useState({ac:[],dc:[],general:[]});
+
+  var data={meta,ac,strings,dcRemarques,onduleurs,photos};
+
+  // Load
+  useEffect(function(){
+    var urlRef=new URLSearchParams(window.location.search).get("ref");
+    if(!urlRef)return;
+    setRef(urlRef);setSaveStatus("loading");
+    supaLoad(urlRef).then(function(row){
+      if(!row||!row.data){setSaveStatus("");return;}
+      isLoading.current=true;
+      var d=row.data;
+      if(d.meta)setMeta(d.meta);
+      if(d.ac)setAc(d.ac);
+      if(d.strings)setStrings(d.strings);
+      if(d.dcRemarques!==undefined)setDcRemarques(d.dcRemarques);
+      if(d.onduleurs)setOnduleurs(d.onduleurs);
+      if(d.photos)setPhotos(d.photos);
+      setLastSaved(row.updated_at);setSaveStatus("saved");
+      setTimeout(function(){isLoading.current=false;},100);
+    });
+  },[]);
+
+  // Auto-save
+  var doSave=function(delay){
+    if(!ref||isLoading.current)return;
+    if(saveTimer.current)clearTimeout(saveTimer.current);
+    setSaveStatus("saving");
+    saveTimer.current=setTimeout(function(){
+      supaSave(ref,data).then(function(ok){
+        if(ok){setLastSaved(new Date().toISOString());setSaveStatus("saved");}
+        else setSaveStatus("error");
+      });
+    },delay||1400);
+  };
+
+  useEffect(function(){doSave(1400);},[meta,ac,strings,dcRemarques,onduleurs]);
+  useEffect(function(){doSave(2000);},[photos]);
+
+  var addPhotos=function(key,items){setPhotos(function(p){return{...p,[key]:p[key].concat(items)};});};
+  var delPhoto=function(key,i){setPhotos(function(p){return{...p,[key]:p[key].filter(function(_,idx){return idx!==i;})};});};
+
+  var setAcIsol=function(k,v){setAc(function(p){return{...p,isol:{...p.isol,[k]:v}};});};
+  var setAcVolt=function(k,v){setAc(function(p){return{...p,volt:{...p.volt,[k]:v}};});};
+  var updStr=function(i,k,v){setStrings(function(p){return p.map(function(r,idx){return idx===i?{...r,[k]:v}:r;});});};
+  var addStr=function(){setStrings(function(p){return p.concat([mkStr(p.length+1)]);});};
+  var delStr=function(i){setStrings(function(p){return p.filter(function(_,idx){return idx!==i;});});};
+
+  var updOnd=function(i,val){setOnduleurs(function(p){return p.map(function(o,idx){return idx===i?val:o;});});};
+  var addOnd=function(){setOnduleurs(function(p){return p.concat([mkOnd(p.length)]);});};
+  var delOnd=function(i){setOnduleurs(function(p){return p.filter(function(_,idx){return idx!==i;});});};
+
+  var saveLabel=function(){
+    if(saveStatus==="saving")return"⏳ Sauvegarde…";
+    if(saveStatus==="loading")return"⏳ Chargement…";
+    if(saveStatus==="error")return"⚠ Erreur de sauvegarde";
+    if(saveStatus==="saved"&&lastSaved){
+      var diff=Math.round((new Date()-new Date(lastSaved))/1000);
+      if(diff<60)return"✓ Sauvegardé";
+      return"✓ "+new Date(lastSaved).toLocaleTimeString("fr-BE",{hour:"2-digit",minute:"2-digit"});
+    }
+    return"";
+  };
+
+  var btnSt=function(active){return{
+    padding:"7px 16px",borderRadius:7,
+    background:active?GREEN_LIGHT:WHITE,color:active?GREEN:MUTED,
+    border:`1px solid ${active?GREEN_MID:BORDER}`,
+    fontSize:13,fontWeight:active?600:400,cursor:"pointer"
+  };};
+
+  var thTd={fontWeight:500,padding:"6px 10px",border:`1px solid ${BORDER}`,width:"30%"};
+  var tdSt={padding:"4px 8px",border:`1px solid ${BORDER}`,textAlign:"center"};
+
+  return(
+    <div style={{maxWidth:960,margin:"0 auto",padding:"1rem .75rem",display:"flex",flexDirection:"column",gap:14}}>
+
+      {/* Header */}
+      <div id="no-print" style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.08em"}}>We Green Energy</div>
+          <div style={{fontSize:20,fontWeight:700}}>
+            Maintenance Onduleur
+            {ref&&<span style={{fontSize:14,fontWeight:400,color:MUTED,marginLeft:10}}>— {ref}</span>}
+          </div>
+          {!ref&&<div style={{fontSize:11,color:ORANGE,marginTop:2}}>⚠ Ajoutez ?ref=S0XXXX dans l'URL pour activer la sauvegarde</div>}
+          {ref&&<div style={{fontSize:11,marginTop:2,color:saveStatus==="error"?RED:saveStatus==="saved"?GREEN:MUTED}}>{saveLabel()}</div>}
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <div style={{display:"flex",border:`1px solid ${BORDER}`,borderRadius:8,overflow:"hidden"}}>
+            <button onClick={function(){setMode("form");}} style={{...btnSt(mode==="form"),borderRadius:0,border:"none",borderRight:`1px solid ${BORDER}`}}>Formulaire</button>
+            <button onClick={function(){setMode("preview");}} style={{...btnSt(mode==="preview"),borderRadius:0,border:"none"}}>Aperçu</button>
+          </div>
+          {mode==="preview"&&<button onClick={function(){window.print();}} style={btnSt(false)}>⬇ PDF</button>}
+        </div>
+      </div>
+
+      {mode==="preview"?<PreviewDoc data={data}/>:(
+
+        <React.Fragment>
+
+          {/* Identification projet */}
+          <div style={CARD}>
+            <div style={SH}>Identification du projet</div>
+            <div style={G2}>
+              <Field label="Adresse du chantier" value={meta.adresse} onChange={function(v){setMeta(function(p){return{...p,adresse:v};});}} placeholder="Rue, numéro, CP, ville"/>
+              <Field label="Responsable de la mesure" value={meta.responsable} onChange={function(v){setMeta(function(p){return{...p,responsable:v};});}} placeholder="Prénom Nom"/>
+              <Field label="Date d'intervention" value={meta.date} onChange={function(v){setMeta(function(p){return{...p,date:v};});}} type="date"/>
+            </div>
+          </div>
+
+          {/* Mesures AC */}
+          <div style={CARD}>
+            <div style={SH}>Mesures AC (installation)</div>
+            <div style={{...G2,marginBottom:14}}>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:MUTED,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:8}}>
+                  Isolement AC <span style={{fontSize:10,fontWeight:400}}>(seuil &gt; 0,5 MΩ = OK)</span>
+                </div>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <tbody>
+                    {[["L1 / PE","l1pe"],["L2 / PE","l2pe"],["L3 / PE","l3pe"],["N / PE","npe"]].map(function(pair){
+                      var lbl=pair[0],k=pair[1],val=ac.isol[k];
+                      var ok=val&&parseFloat(val)>=0.5;
+                      return(
+                        <tr key={k}>
+                          <td style={thTd}>{lbl}</td>
+                          <td style={{padding:"4px 8px",border:`1px solid ${BORDER}`}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <input type="number" step="any" value={val}
+                                onChange={function(e){setAcIsol(k,e.target.value);}}
+                                placeholder="—" style={{width:80,textAlign:"right"}}/>
+                              <span style={{fontSize:12,color:MUTED}}>MΩ</span>
+                              {val&&<span style={{fontSize:11,fontWeight:700,color:WHITE,
+                                background:ok?GREEN:RED,borderRadius:4,padding:"1px 5px"}}>{ok?"OK":"⚠"}</span>}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:MUTED,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:8}}>Voltage AC</div>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <tbody>
+                    {[["L1/N","l1n"],["L2/N","l2n"],["L3/N","l3n"],
+                      ["L1/PE","l1pe_v"],["L2/PE","l2pe_v"],["L3/PE","l3pe_v"],
+                      ["N/PE","npe_v"],["L1/L2","l1l2"],["L2/L3","l2l3"],["L1/L3","l1l3"]
+                    ].map(function(pair){
+                      var lbl=pair[0],k=pair[1];
+                      return(
+                        <tr key={k}>
+                          <td style={thTd}>{lbl}</td>
+                          <td style={{padding:"4px 8px",border:`1px solid ${BORDER}`}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <input type="number" step="any" value={ac.volt[k]}
+                                onChange={function(e){setAcVolt(k,e.target.value);}}
+                                placeholder="—" style={{width:80,textAlign:"right"}}/>
+                              <span style={{fontSize:12,color:MUTED}}>V</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,alignItems:"start"}}>
+              <div>
+                <label style={LBL}>Remarques AC</label>
+                <textarea value={ac.remarques} onChange={function(e){setAc(function(p){return{...p,remarques:e.target.value};});}}
+                  rows={3} style={{width:"100%",resize:"vertical"}} placeholder="Observations…"/>
+              </div>
+              <PhotoZone label="Photos AC" items={photos.ac} onAdd={function(items){addPhotos("ac",items);}} onDelete={function(i){delPhoto("ac",i);}}/>
+            </div>
+          </div>
+
+          {/* DC Strings */}
+          <div style={CARD}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={SH}>Mesures DC — Strings</div>
+              <button onClick={addStr} style={{fontSize:12,color:GREEN,background:"none",border:`1px dashed ${GREEN_MID}`,borderRadius:6,padding:"4px 12px",cursor:"pointer",marginBottom:14}}>+ String</button>
+            </div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",minWidth:540}}>
+                <thead>
+                  <tr style={{background:GREEN}}>
+                    {["String","PE/− (MΩ)","PE/+ (MΩ)","Tension estimée (V)","Tension mesurée (V)",""].map(function(h,i){
+                      return <th key={i} style={{color:WHITE,padding:"7px 10px",textAlign:i===0?"left":"center",fontSize:12,fontWeight:700,width:i===5?36:undefined}}>{h}</th>;
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {strings.map(function(s,i){
+                    var est=parseFloat(s.voltEst),mes=parseFloat(s.voltMes);
+                    var ecart=(!isNaN(est)&&!isNaN(mes)&&est!==0)?Math.abs((mes-est)/est*100).toFixed(1):null;
+                    var warn=ecart&&parseFloat(ecart)>5;
+                    return(
+                      <tr key={i} style={{background:i%2===0?WHITE:"#fafaf8"}}>
+                        <td style={{padding:"6px 8px",border:`1px solid ${BORDER}`}}>
+                          <input type="text" value={s.num} onChange={function(e){updStr(i,"num",e.target.value);}}
+                            style={{width:50,fontWeight:700,color:GREEN,textAlign:"center"}} placeholder={String(i+1)}/>
+                        </td>
+                        {[["isolNeg"],["isolPos"]].map(function(pair){
+                          var k=pair[0],val=s[k],ok=val&&parseFloat(val)>=0.5;
+                          return(
+                            <td key={k} style={tdSt}>
+                              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                                <input type="number" step="any" value={val} onChange={function(e){updStr(i,k,e.target.value);}}
+                                  style={{width:70,textAlign:"right"}} placeholder="—"/>
+                                <span style={{fontSize:11,color:MUTED}}>MΩ</span>
+                                {val&&<span style={{fontSize:10,fontWeight:700,color:ok?GREEN:RED}}>{ok?"✓":"⚠"}</span>}
+                              </div>
+                            </td>
+                          );
+                        })}
+                        <td style={tdSt}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                            <input type="number" step="any" value={s.voltEst} onChange={function(e){updStr(i,"voltEst",e.target.value);}}
+                              style={{width:70,textAlign:"right"}} placeholder="—"/>
+                            <span style={{fontSize:11,color:MUTED}}>V</span>
+                          </div>
+                        </td>
+                        <td style={tdSt}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                            <input type="number" step="any" value={s.voltMes} onChange={function(e){updStr(i,"voltMes",e.target.value);}}
+                              style={{width:70,textAlign:"right"}} placeholder="—"/>
+                            <span style={{fontSize:11,color:MUTED}}>V</span>
+                            {ecart&&<span style={{fontSize:10,fontWeight:700,color:warn?RED:GREEN}}>{ecart}%</span>}
+                          </div>
+                        </td>
+                        <td style={{padding:"4px",border:`1px solid ${BORDER}`,textAlign:"center"}}>
+                          <button onClick={function(){delStr(i);}} style={{fontSize:16,color:MUTED,background:"none",border:"none",cursor:"pointer"}}>x</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div style={{marginTop:6,fontSize:11,color:MUTED}}>Isolement : seuil &gt; 0,5 MΩ = OK · Tension : écart &gt; 5% = rouge</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginTop:14,alignItems:"start"}}>
+              <div>
+                <label style={LBL}>Remarques DC</label>
+                <textarea value={dcRemarques} onChange={function(e){setDcRemarques(e.target.value);}}
+                  rows={3} style={{width:"100%",resize:"vertical"}} placeholder="Observations DC…"/>
+              </div>
+              <PhotoZone label="Photos DC" items={photos.dc} onAdd={function(items){addPhotos("dc",items);}} onDelete={function(i){delPhoto("dc",i);}}/>
+            </div>
+          </div>
+
+          {/* Rapports par onduleur */}
+          <div style={CARD}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div style={{...SH,marginBottom:0,paddingBottom:0,borderBottom:"none"}}>
+                Rapport d'erreur par onduleur
+                <span style={{marginLeft:10,fontSize:12,fontWeight:400,color:MUTED,textTransform:"none",letterSpacing:"normal"}}>
+                  {onduleurs.length} onduleur{onduleurs.length>1?"s":""}
+                </span>
+              </div>
+              <button onClick={addOnd}
+                style={{background:GREEN,color:WHITE,border:"none",borderRadius:8,padding:"7px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                + Onduleur
+              </button>
+            </div>
+            {onduleurs.map(function(ond,i){
+              return(
+                <RapportOnduleur key={ond.id||i} idx={i} ond={ond}
+                  onChange={function(val){updOnd(i,val);}}
+                  onDelete={function(){delOnd(i);}}/>
+              );
+            })}
+          </div>
+
+          {/* Photos générales */}
+          <div style={CARD}>
+            <div style={SH}>Photos générales / pièces jointes</div>
+            <div style={{fontSize:12,color:MUTED,marginBottom:10}}>Captures d'écran monitoring, journal, paramètres…</div>
+            <PhotoZone label="" items={photos.general} onAdd={function(items){addPhotos("general",items);}} onDelete={function(i){delPhoto("general",i);}}/>
+          </div>
+
+        </React.Fragment>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

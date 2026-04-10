@@ -20,16 +20,16 @@ button{font-family:inherit;cursor:pointer}
   body{background:white}
   #no-print{display:none!important}
   #preview-doc{display:block!important;padding:0!important;max-width:100%!important}
-  .preview-table{font-size:11px}
+  .pv-table{font-size:11px}
   .page-break{page-break-before:always}
 }
-.preview-table{width:100%;border-collapse:collapse;font-size:13px}
-.preview-table td,.preview-table th{padding:5px 9px;border:.5px solid #ccc}
-.preview-table th{background:#f0f7f2;font-weight:600;text-align:left;color:#1B6B3A;width:38%}
-.meas-table{width:100%;border-collapse:collapse;font-size:12px}
-.meas-table th{background:#1B6B3A;color:#fff;padding:6px 10px;text-align:left;font-weight:600}
-.meas-table td{border:.5px solid #d0d0c8;padding:4px 8px}
-.meas-table tr:nth-child(even) td{background:#f8faf8}
+.pv-table{width:100%;border-collapse:collapse;font-size:13px}
+.pv-table td,.pv-table th{padding:5px 9px;border:.5px solid #ccc}
+.pv-table th{background:#f0f7f2;font-weight:600;text-align:left;color:#1B6B3A;width:38%}
+.ms-table{width:100%;border-collapse:collapse;font-size:12px}
+.ms-table th{background:#1B6B3A;color:#fff;padding:6px 10px;text-align:left;font-weight:600}
+.ms-table td{border:.5px solid #d0d0c8;padding:4px 8px}
+.ms-table tr:nth-child(even) td{background:#f8faf8}
 @media(max-width:640px){
   body{font-size:15px}
   input,select,textarea{font-size:16px!important;padding:11px 12px;border-radius:8px;width:100%}
@@ -40,289 +40,465 @@ button{font-family:inherit;cursor:pointer}
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useRef, useEffect } = React;
+const {useState,useRef,useEffect}=React;
+const G="#1B6B3A",GL="#f0f7f2",GM="#d4ead9",BD="#d0d0c8",BG="#f4f4f0",W="#ffffff",MU="#666660";
+const RD="#c0392b",BL="#2980b9",OR="#e07b00",AM="#f39c12";
+const CARD={background:W,border:`1px solid ${BD}`,borderRadius:10,padding:"1rem 1.25rem"};
+const SH={fontSize:11,fontWeight:700,color:G,textTransform:"uppercase",letterSpacing:"0.07em",paddingBottom:8,borderBottom:`1px solid ${GM}`,marginBottom:14};
+const LBL={fontSize:12,color:MU,fontWeight:500,marginBottom:4,display:"block"};
+const G2={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12};
 
-const GREEN="#1B6B3A", GREEN_LIGHT="#f0f7f2", GREEN_MID="#d4ead9";
-const BORDER="#d0d0c8", BG="#f4f4f0", WHITE="#ffffff", MUTED="#666660";
-const RED="#c0392b", BLUE="#2980b9", ORANGE="#e07b00";
-
-const CARD={background:WHITE,border:`1px solid ${BORDER}`,borderRadius:10,padding:"1rem 1.25rem"};
-const SH={fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.07em",
-  paddingBottom:8,borderBottom:`1px solid ${GREEN_MID}`,marginBottom:14};
-const LBL={fontSize:12,color:MUTED,fontWeight:500,marginBottom:4,display:"block"};
-const G2={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:12};
-
-const SUPA_URL="https://brodjywccrirlzplovxg.supabase.co";
-const SUPA_KEY="sb_publishable_T4Syy3Nq5mLK0yqOUNgtEg_od2WUXEY";
-
+const SU="https://brodjywccrirlzplovxg.supabase.co";
+const SK="sb_publishable_T4Syy3Nq5mLK0yqOUNgtEg_od2WUXEY";
 async function supaLoad(ref){
-  try{
-    const res=await fetch(SUPA_URL+"/rest/v1/maintenance_onduleur?ref=eq."+encodeURIComponent(ref)+"&select=data,updated_at",
-      {headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY}});
-    const rows=await res.json();
-    if(rows&&rows.length>0)return rows[0];
-  }catch(e){}
-  return null;
+  try{const r=await fetch(SU+"/rest/v1/maintenance_onduleur?ref=eq."+encodeURIComponent(ref)+"&select=data,updated_at",{headers:{"apikey":SK,"Authorization":"Bearer "+SK}});const d=await r.json();if(d&&d.length)return d[0];}catch(e){}return null;
 }
 async function supaSave(ref,data){
-  try{
-    await fetch(SUPA_URL+"/rest/v1/maintenance_onduleur",{
-      method:"POST",
-      headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,
-        "Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},
-      body:JSON.stringify({ref,data,updated_at:new Date().toISOString()})
-    });
-    return true;
-  }catch(e){return false;}
+  try{await fetch(SU+"/rest/v1/maintenance_onduleur",{method:"POST",headers:{"apikey":SK,"Authorization":"Bearer "+SK,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},body:JSON.stringify({ref,data,updated_at:new Date().toISOString()})});return true;}catch(e){return false;}
 }
 
-// ── Field ──────────────────────────────────────────────────────────────────
-const Field=function(props){
-  var label=props.label, value=props.value, onChange=props.onChange;
-  var placeholder=props.placeholder||"", type=props.type||"text", unit=props.unit;
+/* ── Field ── */
+function Field({label,value,onChange,placeholder="",type="text",unit}){
   return(
     <div>
       {label&&<label style={LBL}>{label}</label>}
       <div style={{display:"flex",alignItems:"center",gap:6}}>
-        <input type={type} value={value} onChange={function(e){onChange(e.target.value);}}
-          placeholder={placeholder} style={{flex:1,minWidth:0}}/>
-        {unit&&<span style={{fontSize:12,color:MUTED,whiteSpace:"nowrap"}}>{unit}</span>}
+        <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{flex:1,minWidth:0}}/>
+        {unit&&<span style={{fontSize:12,color:MU,whiteSpace:"nowrap"}}>{unit}</span>}
       </div>
     </div>
   );
-};
+}
 
-// ── Photo zone (single image for fiche signalétique, multi for reports) ────
-function PhotoZone(props){
-  var label=props.label, items=props.items, onAdd=props.onAdd, onDelete=props.onDelete;
-  var single=props.single||false;
-  var [drag,setDrag]=useState(false);
-  var refFile=useRef(), refCam=useRef(), zoneRef=useRef();
-  var isMob=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+/* ── Toggle OUI/NON ── */
+function Toggle({value,onChange}){
+  return(
+    <div style={{display:"flex",gap:5}}>
+      {["OUI","NON"].map(o=>(
+        <button key={o} onClick={()=>onChange(value===o?null:o)} style={{
+          padding:"5px 12px",borderRadius:6,fontSize:13,fontWeight:value===o?700:400,cursor:"pointer",
+          border:`1px solid ${value===o?(o==="OUI"?G:RD):BD}`,
+          background:value===o?(o==="OUI"?GL:"#fdf0f0"):W,
+          color:value===o?(o==="OUI"?G:RD):MU
+        }}>{o}</button>
+      ))}
+    </div>
+  );
+}
 
-  var compress=function(blob){return new Promise(function(res){
-    var img=new Image(), url=URL.createObjectURL(blob);
-    img.onload=function(){
-      var MAX=1000,w=img.width,h=img.height;
-      if(w>h){if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}}
-      else{if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}}
-      var c=document.createElement("canvas");c.width=w;c.height=h;
-      var ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+/* ── Chip ── */
+function Chip({label,selected,color,onClick}){
+  const c=color||G;
+  return(
+    <button onClick={onClick} style={{
+      padding:"5px 12px",borderRadius:6,fontSize:13,fontWeight:selected?700:400,cursor:"pointer",
+      border:`1px solid ${selected?c:BD}`,
+      background:selected?c:W,
+      color:selected?W:MU
+    }}>{label}</button>
+  );
+}
+
+/* ── PhotoZone ── */
+function PhotoZone({label,items,onAdd,onDelete,single}){
+  const [drag,setDrag]=useState(false);
+  const rf=useRef(),rc=useRef(),zr=useRef();
+  const mob=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const compress=blob=>new Promise(res=>{
+    const img=new Image(),url=URL.createObjectURL(blob);
+    img.onload=()=>{
+      const M=1000;let w=img.width,h=img.height;
+      if(w>h){if(w>M){h=Math.round(h*M/w);w=M;}}else{if(h>M){w=Math.round(w*M/h);h=M;}}
+      const c=document.createElement("canvas");c.width=w;c.height=h;
+      const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);
       URL.revokeObjectURL(url);res(c.toDataURL("image/jpeg",0.72));
     };
-    img.onerror=function(){URL.revokeObjectURL(url);res(null);};
+    img.onerror=()=>{URL.revokeObjectURL(url);res(null);};
     img.src=url;
-  });};
-
-  var handleFiles=async function(files){
-    var arr=Array.from(files).filter(function(f){return f.type.startsWith("image/");});
+  });
+  const handleFiles=async files=>{
+    let arr=Array.from(files).filter(f=>f.type.startsWith("image/"));
     if(single)arr=arr.slice(0,1);
-    var result=[];
-    for(var i=0;i<arr.length;i++){
-      var url=await compress(arr[i]);
-      result.push({name:arr[i].name,url:url});
-    }
+    const result=[];
+    for(const f of arr){const url=await compress(f);result.push({name:f.name,url});}
     onAdd(result);
   };
-
-  var handlePaste=async function(e){
-    var imgs=Array.from((e.clipboardData&&e.clipboardData.items)||[]).filter(function(i){return i.type.startsWith("image/");});
-    if(!imgs.length)return; e.preventDefault();
-    var result=[];
-    for(var i=0;i<(single?1:imgs.length);i++){
-      var url=await compress(imgs[i].getAsFile());
-      result.push({name:"colle.jpg",url:url});
-    }
+  const handlePaste=async e=>{
+    const imgs=Array.from(e.clipboardData?.items||[]).filter(i=>i.type.startsWith("image/"));
+    if(!imgs.length)return;e.preventDefault();
+    const result=[];
+    for(const i of imgs.slice(0,single?1:99)){const url=await compress(i.getAsFile());result.push({name:"img.jpg",url});}
     onAdd(result);
   };
-
-  var showItems=single?items.slice(0,1):items;
-
+  const show=single?items.slice(0,1):items;
   return(
     <div>
-      {label&&<div style={{...LBL,marginBottom:5}}>
-        {label}{!single&&items.length>0&&<span style={{color:GREEN,fontWeight:600}}> ({items.length})</span>}
-      </div>}
-      <div ref={zoneRef} tabIndex={0} onPaste={handlePaste}
-        onDragOver={function(e){e.preventDefault();setDrag(true);}}
-        onDragLeave={function(){setDrag(false);}}
-        onDrop={function(e){e.preventDefault();setDrag(false);handleFiles(e.dataTransfer.files);}}
-        style={{border:`1.5px dashed ${drag?GREEN:BORDER}`,background:drag?GREEN_LIGHT:BG,
-          borderRadius:8,padding:8,minHeight:single?90:56,outline:"none"}}>
-        {isMob&&(!single||items.length===0)&&(
-          <div style={{display:"flex",gap:8,marginBottom:items.length?8:0}}>
-            <button onClick={function(){refCam.current&&refCam.current.click();}}
-              style={{flex:1,background:GREEN,color:WHITE,border:"none",borderRadius:8,padding:"8px",fontSize:13,fontWeight:600}}>
-              {single?"📷 Fiche":"📷 Photo"}
-            </button>
-            <button onClick={function(){refFile.current&&refFile.current.click();}}
-              style={{flex:1,background:WHITE,color:GREEN,border:`1.5px solid ${GREEN}`,borderRadius:8,padding:"8px",fontSize:13,fontWeight:600}}>
-              🖼 Galerie
-            </button>
+      {label&&<div style={{...LBL,marginBottom:5}}>{label}{!single&&items.length>0&&<span style={{color:G,fontWeight:600}}> ({items.length})</span>}</div>}
+      <div ref={zr} tabIndex={0} onPaste={handlePaste}
+        onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)}
+        onDrop={e=>{e.preventDefault();setDrag(false);handleFiles(e.dataTransfer.files);}}
+        style={{border:`1.5px dashed ${drag?G:BD}`,background:drag?GL:BG,borderRadius:8,padding:8,minHeight:single?90:52,outline:"none"}}>
+        {mob&&(!single||items.length===0)&&(
+          <div style={{display:"flex",gap:6,marginBottom:show.length?8:0}}>
+            <button onClick={()=>rc.current?.click()} style={{flex:1,background:G,color:W,border:"none",borderRadius:7,padding:"7px",fontSize:13,fontWeight:600}}>📷 {single?"Fiche":"Photo"}</button>
+            <button onClick={()=>rf.current?.click()} style={{flex:1,background:W,color:G,border:`1.5px solid ${G}`,borderRadius:7,padding:"7px",fontSize:13,fontWeight:600}}>🖼 Galerie</button>
           </div>
         )}
-        {!isMob&&showItems.length===0&&(
-          <div style={{height:single?74:40,display:"flex",flexDirection:single?"column":"row",
-            alignItems:"center",justifyContent:"center",gap:8,color:MUTED}}>
-            {single&&<span style={{fontSize:22}}>📷</span>}
+        {!mob&&show.length===0&&(
+          <div style={{height:single?72:36,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
+            {single&&<span style={{fontSize:20}}>📷</span>}
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <span onClick={function(){refFile.current&&refFile.current.click();}}
-                style={{fontSize:12,color:GREEN,cursor:"pointer",textDecoration:"underline"}}>Parcourir</span>
+              <span onClick={()=>rf.current?.click()} style={{fontSize:12,color:G,cursor:"pointer",textDecoration:"underline"}}>Parcourir</span>
               <span style={{fontSize:12,color:"#ccc"}}>|</span>
               <span style={{fontSize:12,color:"#aaa"}}>Drop / Ctrl+V</span>
             </div>
           </div>
         )}
-        {showItems.length>0&&(
-          <div style={{display:"flex",flexWrap:single?"nowrap":"wrap",gap:6}}>
-            {showItems.map(function(item,i){
-              var sz=single?80:60;
+        {show.length>0&&(
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {show.map((item,i)=>{
+              const sz=single?80:56;
               return(
                 <div key={i} style={{position:"relative",flexShrink:0}}>
-                  <img src={item.url} alt={item.name}
-                    style={{width:sz,height:sz,objectFit:"cover",borderRadius:6,
-                      border:`1px solid ${BORDER}`,display:"block"}}/>
-                  <button onClick={function(){onDelete(i);}}
-                    style={{position:"absolute",top:-6,right:-6,width:18,height:18,borderRadius:"50%",
-                      background:"#e74c3c",color:WHITE,border:"none",cursor:"pointer",fontSize:11,
-                      display:"flex",alignItems:"center",justifyContent:"center"}}>x</button>
+                  <img src={item.url} alt={item.name} style={{width:sz,height:sz,objectFit:"cover",borderRadius:6,border:`1px solid ${BD}`,display:"block"}}/>
+                  <button onClick={()=>onDelete(i)} style={{position:"absolute",top:-5,right:-5,width:17,height:17,borderRadius:"50%",background:"#e74c3c",color:W,border:"none",cursor:"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
                 </div>
               );
             })}
-            {!single&&(
-              <div onClick={function(){refFile.current&&refFile.current.click();}}
-                style={{width:60,height:60,display:"flex",alignItems:"center",justifyContent:"center",
-                  border:`1.5px dashed ${BORDER}`,borderRadius:6,cursor:"pointer",fontSize:20,color:MUTED}}>+</div>
-            )}
-            {single&&items.length===0&&isMob&&null}
+            {!single&&<div onClick={()=>rf.current?.click()} style={{width:56,height:56,display:"flex",alignItems:"center",justifyContent:"center",border:`1.5px dashed ${BD}`,borderRadius:6,cursor:"pointer",fontSize:20,color:MU}}>+</div>}
           </div>
         )}
       </div>
-      <input ref={refCam} type="file" multiple={!single} accept="image/*" capture="environment"
-        style={{display:"none"}} onChange={function(e){handleFiles(e.target.files);}}/>
-      <input ref={refFile} type="file" multiple={!single} accept="image/*,.heic,.heif"
-        style={{display:"none"}} onChange={function(e){handleFiles(e.target.files);}}/>
+      <input ref={rc} type="file" multiple={!single} accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>handleFiles(e.target.files)}/>
+      <input ref={rf} type="file" multiple={!single} accept="image/*,.heic" style={{display:"none"}} onChange={e=>handleFiles(e.target.files)}/>
     </div>
   );
 }
 
-// ── Rapport erreur par onduleur ────────────────────────────────────────────
-function RapportOnduleur(props){
-  var idx=props.idx, ond=props.ond, onChange=props.onChange, onDelete=props.onDelete;
-  var [open,setOpen]=useState(true);
+/* ── String row ── */
+function StringsTable({strings,onUpdate,onAdd,onDelete}){
+  const thSt={color:W,padding:"7px 10px",fontSize:12,fontWeight:700,background:G};
+  const tdSt={padding:"4px 8px",border:`1px solid ${BD}`,textAlign:"center"};
+  const updStr=(i,k,v)=>onUpdate(strings.map((r,idx)=>idx===i?{...r,[k]:v}:r));
+  return(
+    <div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",minWidth:500}}>
+          <thead>
+            <tr>
+              <th style={{...thSt,textAlign:"left",width:70}}>String</th>
+              <th style={thSt}>PE/− (MΩ)</th>
+              <th style={thSt}>PE/+ (MΩ)</th>
+              <th style={thSt}>Tension est. (V)</th>
+              <th style={thSt}>Tension mes. (V)</th>
+              <th style={{...thSt,width:36}}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {strings.map((s,i)=>{
+              const est=parseFloat(s.voltEst),mes=parseFloat(s.voltMes);
+              const ecart=(!isNaN(est)&&!isNaN(mes)&&est!==0)?Math.abs((mes-est)/est*100).toFixed(1):null;
+              const warn=ecart&&parseFloat(ecart)>5;
+              return(
+                <tr key={i} style={{background:i%2===0?W:"#fafaf8"}}>
+                  <td style={{padding:"5px 8px",border:`1px solid ${BD}`}}>
+                    <input type="text" value={s.num} onChange={e=>updStr(i,"num",e.target.value)} style={{width:46,fontWeight:700,color:G,textAlign:"center"}} placeholder={String(i+1)}/>
+                  </td>
+                  {["isolNeg","isolPos"].map(k=>{
+                    const val=s[k],ok=val&&parseFloat(val)>=0.5;
+                    return(
+                      <td key={k} style={tdSt}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:3}}>
+                          <input type="number" step="any" value={val} onChange={e=>updStr(i,k,e.target.value)} style={{width:64,textAlign:"right"}} placeholder="—"/>
+                          <span style={{fontSize:11,color:MU}}>MΩ</span>
+                          {val&&<span style={{fontSize:10,fontWeight:700,color:ok?G:RD}}>{ok?"✓":"⚠"}</span>}
+                        </div>
+                      </td>
+                    );
+                  })}
+                  <td style={tdSt}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:3}}>
+                      <input type="number" step="any" value={s.voltEst} onChange={e=>updStr(i,"voltEst",e.target.value)} style={{width:64,textAlign:"right"}} placeholder="—"/>
+                      <span style={{fontSize:11,color:MU}}>V</span>
+                    </div>
+                  </td>
+                  <td style={tdSt}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:3}}>
+                      <input type="number" step="any" value={s.voltMes} onChange={e=>updStr(i,"voltMes",e.target.value)} style={{width:64,textAlign:"right"}} placeholder="—"/>
+                      <span style={{fontSize:11,color:MU}}>V</span>
+                      {ecart&&<span style={{fontSize:10,fontWeight:700,color:warn?RD:G}}>{ecart}%</span>}
+                    </div>
+                  </td>
+                  <td style={{padding:"4px",border:`1px solid ${BD}`,textAlign:"center"}}>
+                    <button onClick={()=>onDelete(i)} style={{fontSize:15,color:MU,background:"none",border:"none",cursor:"pointer"}}>×</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8,flexWrap:"wrap",gap:8}}>
+        <div style={{fontSize:11,color:MU}}>Isolement &gt; 0,5 MΩ = OK · Tension : écart &gt; 5% = rouge</div>
+        <button onClick={onAdd} style={{fontSize:12,color:G,background:"none",border:`1px dashed ${GM}`,borderRadius:6,padding:"3px 10px",cursor:"pointer"}}>+ String</button>
+      </div>
+    </div>
+  );
+}
 
-  var set=function(k,v){onChange({...ond,[k]:v});};
-  var setEr=function(k,v){onChange({...ond,erreur:{...ond.erreur,[k]:v}});};
+/* ── Onduleur card ── */
+function OnduleurCard({idx,ond,onChange,onDelete}){
+  const [open,setOpen]=useState(true);
+  const set=(k,v)=>onChange({...ond,[k]:v});
+  const setE=(k,v)=>onChange({...ond,erreur:{...ond.erreur,[k]:v}});
+  const allStr=ond.strings||[];
+  const mkS=n=>({num:String(n),isolNeg:"",isolPos:"",voltEst:"",voltMes:""});
 
-  var hasData=ond.modele||ond.serie||ond.erreur.description||ond.erreur.code;
-  var borderCol=ond.erreur.description?ORANGE:BORDER;
+  // Status color
+  const statusColor=ond.etat==="OK"?G:ond.etat==="Erreur"?RD:BD;
+  const statusBg=ond.etat==="OK"?GL:ond.etat==="Erreur"?"#fdf0f0":W;
 
   return(
-    <div style={{border:`1.5px solid ${borderCol}`,borderRadius:10,overflow:"hidden",marginBottom:12}}>
-      {/* Header row */}
-      <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",
-        background:open?GREEN_LIGHT:WHITE,cursor:"pointer",borderBottom:open?`1px solid ${GREEN_MID}`:"none"}}
-        onClick={function(){setOpen(!open);}}>
-        <div style={{width:28,height:28,borderRadius:"50%",background:GREEN,color:WHITE,
-          display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,flexShrink:0}}>
+    <div style={{border:`2px solid ${statusColor}`,borderRadius:10,overflow:"hidden",marginBottom:12}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:open?statusBg:W,cursor:"pointer",borderBottom:open?`1px solid ${statusColor}33`:"none"}} onClick={()=>setOpen(!open)}>
+        <div style={{width:28,height:28,borderRadius:"50%",background:statusColor,color:W,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,flexShrink:0}}>
           {idx+1}
         </div>
-        <div style={{flex:1}}>
-          <div style={{fontSize:13,fontWeight:600,color:open?GREEN:"#1a1a1a"}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:600,color:"#1a1a1a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
             {ond.modele||"Onduleur "+(idx+1)}
-            {ond.serie&&<span style={{fontSize:12,fontWeight:400,color:MUTED,marginLeft:8}}>S/N: {ond.serie}</span>}
+            {ond.serie&&<span style={{fontSize:12,fontWeight:400,color:MU,marginLeft:8}}>S/N: {ond.serie}</span>}
           </div>
-          {ond.erreur.code&&<div style={{fontSize:11,color:ORANGE,marginTop:1}}>Code: {ond.erreur.code}</div>}
+          <div style={{display:"flex",gap:8,alignItems:"center",marginTop:2,flexWrap:"wrap"}}>
+            {ond.etat&&<span style={{fontSize:11,fontWeight:700,color:W,background:statusColor,borderRadius:4,padding:"0px 6px"}}>{ond.etat}</span>}
+            {ond.erreur&&ond.erreur.code&&<span style={{fontSize:11,color:OR}}>Code: {ond.erreur.code}</span>}
+            {ond.majFirmware==="OUI"&&<span style={{fontSize:11,color:BL}}>MAJ: {ond.firmwareVersion||"—"}</span>}
+            {ond.erreur&&ond.erreur.redemarrage&&<span style={{fontSize:11,color:G}}>✓ Reboot</span>}
+            {ond.stringsOk&&<span style={{fontSize:11,color:G}}>✓ Strings OK</span>}
+          </div>
         </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {ond.erreur.redemarrage&&<span style={{fontSize:10,background:GREEN,color:WHITE,borderRadius:4,padding:"1px 6px",fontWeight:600}}>✓ Reboot</span>}
-          <span style={{fontSize:16,color:MUTED,transform:open?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</span>
-          <button onClick={function(e){e.stopPropagation();onDelete();}}
-            style={{fontSize:18,color:"#ccc",background:"none",border:"none",cursor:"pointer",lineHeight:1,padding:"0 2px"}}
-            title="Supprimer cet onduleur">x</button>
-        </div>
+        <span style={{fontSize:16,color:MU,transform:open?"rotate(180deg)":"none",transition:"transform .2s",flexShrink:0}}>▾</span>
+        <button onClick={e=>{e.stopPropagation();onDelete();}} style={{fontSize:18,color:"#ccc",background:"none",border:"none",cursor:"pointer",padding:"0 2px",flexShrink:0}} title="Supprimer">×</button>
       </div>
 
       {open&&(
-        <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{padding:"16px",display:"flex",flexDirection:"column",gap:16}}>
 
-          {/* Identification + fiche signalétique */}
+          {/* Identification + fiche */}
           <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:14,alignItems:"start"}}>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               <div style={G2}>
-                <Field label="Modèle" value={ond.modele} onChange={function(v){set("modele",v);}} placeholder="Ex: Deye SUN-8K-SG03LP1"/>
-                <Field label="Numéro de série" value={ond.serie} onChange={function(v){set("serie",v);}} placeholder="S/N…"/>
+                <Field label="Modèle" value={ond.modele||""} onChange={v=>set("modele",v)} placeholder="Ex: Deye SUN-8K-SG03LP1"/>
+                <Field label="Numéro de série" value={ond.serie||""} onChange={v=>set("serie",v)} placeholder="S/N…"/>
               </div>
-              <Field label="Emplacement / repère" value={ond.emplacement||""} onChange={function(v){set("emplacement",v);}} placeholder="Ex: Local technique, salle des serveurs…"/>
+              <Field label="Emplacement / repère" value={ond.emplacement||""} onChange={v=>set("emplacement",v)} placeholder="Ex: Local technique R+1"/>
             </div>
             <div style={{minWidth:100}}>
-              <div style={{fontSize:12,color:MUTED,fontWeight:500,marginBottom:4}}>Fiche signalétique</div>
-              <PhotoZone single={true} label="" items={ond.photoFiche||[]}
-                onAdd={function(items){set("photoFiche",(ond.photoFiche||[]).concat(items).slice(0,1));}}
-                onDelete={function(){set("photoFiche",[]);}}/>
+              <div style={{...LBL,marginBottom:4}}>Fiche signalétique</div>
+              <PhotoZone single={true} items={ond.photoFiche||[]}
+                onAdd={items=>set("photoFiche",(ond.photoFiche||[]).concat(items).slice(0,1))}
+                onDelete={()=>set("photoFiche",[])}/>
             </div>
           </div>
 
-          <hr style={{border:"none",borderTop:`1px solid ${BORDER}`}}/>
+          <hr style={{border:"none",borderTop:`1px solid ${BD}`}}/>
 
-          {/* Rapport d'erreur */}
-          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:-4}}>
-            Rapport d'erreur
+          {/* État onduleur */}
+          <div>
+            <div style={{...LBL,marginBottom:8,fontSize:13,fontWeight:600,color:"#1a1a1a"}}>État de l'onduleur</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>set("etat",ond.etat==="OK"?null:"OK")} style={{
+                padding:"8px 20px",borderRadius:8,fontSize:14,fontWeight:700,cursor:"pointer",
+                border:`2px solid ${ond.etat==="OK"?G:BD}`,background:ond.etat==="OK"?G:W,color:ond.etat==="OK"?W:MU,
+                display:"flex",alignItems:"center",gap:6
+              }}>✓ OK</button>
+              <button onClick={()=>set("etat",ond.etat==="Erreur"?null:"Erreur")} style={{
+                padding:"8px 20px",borderRadius:8,fontSize:14,fontWeight:700,cursor:"pointer",
+                border:`2px solid ${ond.etat==="Erreur"?RD:BD}`,background:ond.etat==="Erreur"?RD:W,color:ond.etat==="Erreur"?W:MU,
+                display:"flex",alignItems:"center",gap:6
+              }}>⚠ Erreur</button>
+            </div>
           </div>
 
+          {/* LEDs */}
           <div>
-            <label style={LBL}>a) Description du problème</label>
-            <textarea value={ond.erreur.description} onChange={function(e){setEr("description",e.target.value);}}
-              rows={3} style={{width:"100%",resize:"vertical"}} placeholder="Comportement anormal observé…"/>
-          </div>
-
-          <div>
-            <label style={LBL}>b) État des LEDs</label>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:8}}>
-              {[["ledVert","🟢 Vert (OK)",GREEN],["ledRouge","🔴 Rouge (Erreur)",RED],["ledBleu","🔵 Bleu (Comm.)",BLUE]].map(function(arr){
-                var k=arr[0],lbl=arr[1],col=arr[2];
+            <div style={{...LBL,marginBottom:8,fontSize:12,fontWeight:600}}>b) État des LEDs <span style={{fontWeight:400,color:MU}}>(cliquer si OK)</span></div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {[["Vert","ledVert",G,"✓ Vert OK"],["Rouge","ledRouge",RD,"● Rouge"],["Bleu","ledBleu",BL,"● Bleu"]].map(([lbl,k,col,chipLbl])=>{
+                const val=ond[k];
                 return(
-                  <div key={k}>
-                    <label style={{...LBL,color:col}}>{lbl}</label>
-                    <input value={ond.erreur[k]||""} onChange={function(e){setEr(k,e.target.value);}}
-                      placeholder="État…" style={{width:"100%",borderColor:col}}/>
-                  </div>
+                  <button key={k} onClick={()=>set(k,val?"":lbl+" OK")} style={{
+                    padding:"7px 14px",borderRadius:8,fontSize:13,fontWeight:val?700:500,cursor:"pointer",
+                    border:`2px solid ${val?col:BD}`,background:val?col:W,color:val?W:MU,
+                    display:"flex",alignItems:"center",gap:5,transition:"all .15s"
+                  }}>
+                    <span style={{fontSize:10}}>●</span> {lbl} {val?"✓":"?"}
+                  </button>
                 );
               })}
             </div>
-          </div>
-
-          <Field label="c) Message / Code d'erreur onduleur" value={ond.erreur.code||""}
-            onChange={function(v){setEr("code",v);}} placeholder="Ex: E027, Grid fault…"/>
-
-          <div>
-            <label style={LBL}>d) Opérations déjà réalisées</label>
-            <textarea value={ond.erreur.operations||""} onChange={function(e){setEr("operations",e.target.value);}}
-              rows={2} style={{width:"100%",resize:"vertical"}} placeholder="Actions déjà tentées…"/>
-          </div>
-
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,alignItems:"start"}}>
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <div onClick={function(){setEr("redemarrage",!ond.erreur.redemarrage);}}
-                style={{padding:"10px 14px",background:ond.erreur.redemarrage?GREEN_LIGHT:BG,
-                  border:`1px solid ${ond.erreur.redemarrage?GREEN_MID:BORDER}`,borderRadius:8,
-                  display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer"}}>
-                <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${ond.erreur.redemarrage?GREEN:BORDER}`,
-                  background:ond.erreur.redemarrage?GREEN:WHITE,display:"flex",alignItems:"center",
-                  justifyContent:"center",flexShrink:0,marginTop:1}}>
-                  {ond.erreur.redemarrage&&<span style={{color:WHITE,fontSize:12,fontWeight:700}}>✓</span>}
-                </div>
-                <div>
-                  <div style={{fontSize:13,fontWeight:600,color:ond.erreur.redemarrage?GREEN:"#1a1a1a"}}>e) Redémarrage attesté</div>
-                  <div style={{fontSize:11,color:MUTED,marginTop:2}}>DC OFF + AC déconnecté — &gt; 15 min</div>
-                </div>
+            {/* Si rouge ou bleu, champ description */}
+            {(ond.ledRouge||ond.ledBleu)&&(
+              <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:6}}>
+                {ond.ledRouge&&<Field label="Description LED Rouge" value={ond.ledRougeDesc||""} onChange={v=>set("ledRougeDesc",v)} placeholder="Description du code/comportement…"/>}
+                {ond.ledBleu&&<Field label="Description LED Bleu" value={ond.ledBleuDesc||""} onChange={v=>set("ledBleuDesc",v)} placeholder="Description de l'anomalie de communication…"/>}
               </div>
-              <Field label="Version firmware (si MAJ)" value={ond.erreur.firmware||""}
-                onChange={function(v){setEr("firmware",v);}} placeholder="Ex: v1.42.00"/>
+            )}
+          </div>
+
+          {/* Mise à jour firmware */}
+          <div>
+            <div style={{...LBL,marginBottom:8,fontSize:12,fontWeight:600}}>Mise à jour firmware effectuée</div>
+            <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+              <Toggle value={ond.majFirmware||null} onChange={v=>set("majFirmware",v)}/>
+              {ond.majFirmware==="OUI"&&(
+                <div style={{flex:1,minWidth:180}}>
+                  <input value={ond.firmwareVersion||""} onChange={e=>set("firmwareVersion",e.target.value)}
+                    placeholder="Version installée (ex: v1.42.00)" style={{width:"100%"}}/>
+                </div>
+              )}
             </div>
-            <PhotoZone label="Photos erreur / LEDs" items={ond.photosErreur||[]}
-              onAdd={function(items){set("photosErreur",(ond.photosErreur||[]).concat(items));}}
-              onDelete={function(i){set("photosErreur",(ond.photosErreur||[]).filter(function(_,idx){return idx!==i;}));}}/>
+          </div>
+
+          {/* Redémarrage */}
+          <div onClick={()=>set("redemarrage",!ond.redemarrage)}
+            style={{padding:"10px 14px",background:ond.redemarrage?GL:BG,
+              border:`1px solid ${ond.redemarrage?GM:BD}`,borderRadius:8,
+              display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer"}}>
+            <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${ond.redemarrage?G:BD}`,
+              background:ond.redemarrage?G:W,display:"flex",alignItems:"center",
+              justifyContent:"center",flexShrink:0,marginTop:1}}>
+              {ond.redemarrage&&<span style={{color:W,fontSize:13,fontWeight:700}}>✓</span>}
+            </div>
+            <div>
+              <div style={{fontSize:13,fontWeight:600,color:ond.redemarrage?G:"#1a1a1a"}}>Redémarrage complet attesté</div>
+              <div style={{fontSize:11,color:MU,marginTop:1}}>Commutateur DC OFF pendant AC déconnecté — durée &gt; 15 min</div>
+            </div>
+          </div>
+
+          {/* Rapport d'erreur — visible seulement si état = Erreur */}
+          {ond.etat==="Erreur"&&(
+            <div style={{background:"#fff8f5",border:`1px solid ${RD}33`,borderRadius:8,padding:14,display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{fontSize:12,fontWeight:700,color:RD,textTransform:"uppercase",letterSpacing:"0.06em"}}>Rapport d'erreur</div>
+
+              <div>
+                <label style={LBL}>a) Description du problème</label>
+                <textarea value={(ond.erreur&&ond.erreur.description)||""} onChange={e=>setE("description",e.target.value)}
+                  rows={3} style={{width:"100%",resize:"vertical"}} placeholder="Comportement anormal observé…"/>
+              </div>
+
+              <Field label="c) Message / Code d'erreur onduleur" value={(ond.erreur&&ond.erreur.code)||""}
+                onChange={v=>setE("code",v)} placeholder="Ex: E027, Grid fault…"/>
+
+              <div>
+                <label style={LBL}>d) Opérations déjà réalisées</label>
+                <textarea value={(ond.erreur&&ond.erreur.operations)||""} onChange={e=>setE("operations",e.target.value)}
+                  rows={2} style={{width:"100%",resize:"vertical"}} placeholder="Actions déjà tentées…"/>
+              </div>
+
+              <PhotoZone label="Photos erreur / LEDs" items={ond.photosErreur||[]}
+                onAdd={items=>set("photosErreur",(ond.photosErreur||[]).concat(items))}
+                onDelete={i=>set("photosErreur",(ond.photosErreur||[]).filter((_,idx)=>idx!==i))}/>
+            </div>
+          )}
+
+          {/* Mesures AC */}
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:G,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10,paddingBottom:6,borderBottom:`1px solid ${GM}`}}>
+              Mesures AC
+            </div>
+            <div style={G2}>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:MU,marginBottom:7}}>Isolement AC <span style={{fontWeight:400}}>(seuil &gt; 0,5 MΩ)</span></div>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <tbody>
+                    {[["L1/PE","acL1pe"],["L2/PE","acL2pe"],["L3/PE","acL3pe"],["N/PE","acNpe"]].map(([lbl,k])=>{
+                      const val=(ond.ac||{})[k]||"";
+                      const ok=val&&parseFloat(val)>=0.5;
+                      return(
+                        <tr key={k}>
+                          <td style={{fontWeight:500,padding:"5px 8px",border:`1px solid ${BD}`,width:"30%",fontSize:12}}>{lbl}</td>
+                          <td style={{padding:"3px 8px",border:`1px solid ${BD}`}}>
+                            <div style={{display:"flex",alignItems:"center",gap:5}}>
+                              <input type="number" step="any" value={val} onChange={e=>set("ac",{...(ond.ac||{}),[k]:e.target.value})} placeholder="—" style={{width:74,textAlign:"right"}}/>
+                              <span style={{fontSize:11,color:MU}}>MΩ</span>
+                              {val&&<span style={{fontSize:10,fontWeight:700,color:W,background:ok?G:RD,borderRadius:3,padding:"0 4px"}}>{ok?"OK":"⚠"}</span>}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:MU,marginBottom:7}}>Voltage AC</div>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <tbody>
+                    {[["L1/N","vL1n"],["L2/N","vL2n"],["L3/N","vL3n"],["L1/PE","vL1pe"],["L2/PE","vL2pe"],["L3/PE","vL3pe"],["N/PE","vNpe"],["L1/L2","vL1L2"],["L2/L3","vL2L3"],["L1/L3","vL1L3"]].map(([lbl,k])=>{
+                      const val=(ond.ac||{})[k]||"";
+                      return(
+                        <tr key={k}>
+                          <td style={{fontWeight:500,padding:"4px 8px",border:`1px solid ${BD}`,width:"30%",fontSize:12}}>{lbl}</td>
+                          <td style={{padding:"3px 8px",border:`1px solid ${BD}`}}>
+                            <div style={{display:"flex",alignItems:"center",gap:5}}>
+                              <input type="number" step="any" value={val} onChange={e=>set("ac",{...(ond.ac||{}),[k]:e.target.value})} placeholder="—" style={{width:74,textAlign:"right"}}/>
+                              <span style={{fontSize:11,color:MU}}>V</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div style={{marginTop:10,display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,alignItems:"start"}}>
+              <div>
+                <label style={LBL}>Remarques AC</label>
+                <textarea value={(ond.ac&&ond.ac.remarques)||""} onChange={e=>set("ac",{...(ond.ac||{}),remarques:e.target.value})}
+                  rows={2} style={{width:"100%",resize:"vertical"}} placeholder="Observations…"/>
+              </div>
+              <PhotoZone label="Photos AC" items={ond.photosAc||[]}
+                onAdd={items=>set("photosAc",(ond.photosAc||[]).concat(items))}
+                onDelete={i=>set("photosAc",(ond.photosAc||[]).filter((_,idx)=>idx!==i))}/>
+            </div>
+          </div>
+
+          {/* Strings DC */}
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:G,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10,paddingBottom:6,borderBottom:`1px solid ${GM}`}}>
+              Mesures DC — Strings
+            </div>
+            <StringsTable
+              strings={allStr}
+              onUpdate={v=>set("strings",v)}
+              onAdd={()=>set("strings",[...allStr,mkS(allStr.length+1)])}
+              onDelete={i=>set("strings",allStr.filter((_,idx)=>idx!==i))}/>
+            <div style={{marginTop:12,display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,alignItems:"start"}}>
+              <div>
+                <label style={LBL}>Remarques DC</label>
+                <textarea value={ond.dcRemarques||""} onChange={e=>set("dcRemarques",e.target.value)}
+                  rows={2} style={{width:"100%",resize:"vertical"}} placeholder="Observations DC…"/>
+              </div>
+              <PhotoZone label="Photos DC" items={ond.photosDc||[]}
+                onAdd={items=>set("photosDc",(ond.photosDc||[]).concat(items))}
+                onDelete={i=>set("photosDc",(ond.photosDc||[]).filter((_,idx)=>idx!==i))}/>
+            </div>
+            {/* Strings OK checkbox */}
+            <div onClick={()=>set("stringsOk",!ond.stringsOk)}
+              style={{marginTop:10,padding:"9px 14px",background:ond.stringsOk?GL:BG,
+                border:`1.5px solid ${ond.stringsOk?G:BD}`,borderRadius:8,
+                display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+              <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${ond.stringsOk?G:BD}`,
+                background:ond.stringsOk?G:W,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {ond.stringsOk&&<span style={{color:W,fontSize:13,fontWeight:700}}>✓</span>}
+              </div>
+              <div style={{fontSize:13,fontWeight:ond.stringsOk?700:500,color:ond.stringsOk?G:"#1a1a1a"}}>
+                Strings OK — toutes les mesures DC sont conformes
+              </div>
+            </div>
           </div>
 
         </div>
@@ -331,500 +507,284 @@ function RapportOnduleur(props){
   );
 }
 
-// ── Preview ────────────────────────────────────────────────────────────────
-function PreviewDoc(props){
-  var data=props.data;
-  var tv=function(v){return v||"—";};
-
+/* ── Preview ── */
+function PreviewDoc({data}){
+  const tv=v=>v||"—";
   return(
-    <div id="preview-doc" style={{maxWidth:720,margin:"0 auto",padding:"1rem .5rem",fontSize:13,color:"#1a1a1a",lineHeight:1.6}}>
+    <div id="preview-doc" style={{maxWidth:720,margin:"0 auto",padding:"1rem .5rem",fontSize:13,lineHeight:1.6}}>
       {/* Header */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",
-        marginBottom:20,paddingBottom:14,borderBottom:`2px solid ${GREEN}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,paddingBottom:14,borderBottom:`2px solid ${G}`}}>
         <div>
-          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.08em"}}>We Green Energy</div>
+          <div style={{fontSize:11,fontWeight:700,color:G,textTransform:"uppercase",letterSpacing:"0.08em"}}>We Green Energy</div>
           <div style={{fontSize:22,fontWeight:700}}>Rapport de maintenance onduleur</div>
-          <div style={{fontSize:12,color:MUTED,marginTop:2}}>Analyse de données — Mesures terrain</div>
+          {data.meta.client&&<div style={{fontSize:14,color:MU,marginTop:2}}>{data.meta.client}</div>}
         </div>
-        <div style={{textAlign:"right",fontSize:12,color:MUTED}}>
+        <div style={{textAlign:"right",fontSize:12,color:MU}}>
           <div style={{fontWeight:600,color:"#1a1a1a"}}>{tv(data.meta.date)}</div>
           <div>{tv(data.meta.responsable)}</div>
         </div>
       </div>
 
-      {/* Identification projet */}
+      {/* Identification */}
       <div style={{marginBottom:16}}>
-        <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>Identification du projet</div>
-        <table className="preview-table"><tbody>
-          <tr><th>Adresse du chantier</th><td>{tv(data.meta.adresse)}</td></tr>
+        <div style={{fontSize:11,fontWeight:700,color:G,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>Identification</div>
+        <table className="pv-table"><tbody>
+          <tr><th>Client</th><td>{tv(data.meta.client)}</td></tr>
+          <tr><th>Adresse</th><td>{tv(data.meta.adresse)}</td></tr>
           <tr><th>Responsable</th><td>{tv(data.meta.responsable)}</td></tr>
-          <tr><th>Date d'intervention</th><td>{tv(data.meta.date)}</td></tr>
-          <tr><th>Onduleurs sur site</th><td>{data.onduleurs.length}</td></tr>
+          <tr><th>Date</th><td>{tv(data.meta.date)}</td></tr>
+          <tr><th>Onduleurs</th><td>{data.onduleurs.length} — {data.onduleurs.filter(o=>o.etat==="OK").length} OK / {data.onduleurs.filter(o=>o.etat==="Erreur").length} en erreur</td></tr>
         </tbody></table>
       </div>
 
-      {/* AC */}
-      <div style={{...G2,marginBottom:16}}>
-        <div>
-          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>Isolement AC</div>
-          <table className="preview-table"><tbody>
-            {[["L1/PE",data.ac.isol.l1pe],["L2/PE",data.ac.isol.l2pe],["L3/PE",data.ac.isol.l3pe],["N/PE",data.ac.isol.npe]].map(function(pair){
-              return <tr key={pair[0]}><th>{pair[0]}</th><td>{pair[1]?pair[1]+" MΩ":"—"}</td></tr>;
-            })}
-          </tbody></table>
-        </div>
-        <div>
-          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>Voltage AC</div>
-          <table className="preview-table"><tbody>
-            {[["L1/N",data.ac.volt.l1n],["L2/N",data.ac.volt.l2n],["L3/N",data.ac.volt.l3n],
-              ["L1/PE",data.ac.volt.l1pe_v],["L2/PE",data.ac.volt.l2pe_v],["L3/PE",data.ac.volt.l3pe_v],
-              ["N/PE",data.ac.volt.npe_v],["L1/L2",data.ac.volt.l1l2],["L2/L3",data.ac.volt.l2l3],["L1/L3",data.ac.volt.l1l3]
-            ].map(function(pair){
-              return <tr key={pair[0]}><th>{pair[0]}</th><td>{pair[1]?pair[1]+" V":"—"}</td></tr>;
-            })}
-          </tbody></table>
-        </div>
-      </div>
-
-      {/* DC isolation */}
-      {data.strings.some(function(s){return s.isolNeg||s.isolPos;})&&(
-        <div style={{marginBottom:16}}>
-          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>Isolement DC</div>
-          <table className="meas-table">
-            <thead><tr><th>String</th><th>PE/− (MΩ)</th><th>PE/+ (MΩ)</th><th>Statut</th></tr></thead>
-            <tbody>
-              {data.strings.filter(function(s){return s.isolNeg||s.isolPos;}).map(function(s,i){
-                var ok=parseFloat(s.isolNeg)>=0.5&&parseFloat(s.isolPos)>=0.5;
-                return(
-                  <tr key={i}>
-                    <td style={{fontWeight:600}}>STR {s.num}</td>
-                    <td>{s.isolNeg||"—"}</td><td>{s.isolPos||"—"}</td>
-                    <td><span style={{fontSize:11,fontWeight:700,color:WHITE,
-                      background:(s.isolNeg&&s.isolPos)?(ok?GREEN:RED):"#aaa",borderRadius:4,padding:"1px 6px"}}>
-                      {(s.isolNeg&&s.isolPos)?(ok?"OK":"⚠"):"—"}
-                    </span></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div style={{fontSize:11,color:MUTED,marginTop:4}}>Seuil : &gt; 0,5 MΩ = OK</div>
-        </div>
-      )}
-
-      {/* DC voltage */}
-      {data.strings.some(function(s){return s.voltEst||s.voltMes;})&&(
-        <div style={{marginBottom:16}}>
-          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>Voltage DC</div>
-          <table className="meas-table">
-            <thead><tr><th>String</th><th>Estimé (V)</th><th>Mesuré (V)</th><th>Écart</th></tr></thead>
-            <tbody>
-              {data.strings.filter(function(s){return s.voltEst||s.voltMes;}).map(function(s,i){
-                var est=parseFloat(s.voltEst), mes=parseFloat(s.voltMes);
-                var ecart=(!isNaN(est)&&!isNaN(mes)&&est!==0)?Math.abs((mes-est)/est*100).toFixed(1):null;
-                var warn=ecart&&parseFloat(ecart)>5;
-                return(
-                  <tr key={i}>
-                    <td style={{fontWeight:600}}>STR {s.num}</td>
-                    <td>{s.voltEst||"—"}</td><td>{s.voltMes||"—"}</td>
-                    <td>{ecart?<span style={{color:warn?RED:GREEN,fontWeight:600}}>{ecart}%{warn?" ⚠":" ✓"}</span>:"—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {data.ac.remarques&&<div style={{marginBottom:12,padding:"8px 12px",background:BG,borderRadius:6,border:`1px solid ${BORDER}`,fontSize:12}}><strong>Remarques AC :</strong> {data.ac.remarques}</div>}
-      {data.dcRemarques&&<div style={{marginBottom:12,padding:"8px 12px",background:BG,borderRadius:6,border:`1px solid ${BORDER}`,fontSize:12}}><strong>Remarques DC :</strong> {data.dcRemarques}</div>}
-
-      {/* Rapport par onduleur */}
-      {data.onduleurs.map(function(ond,idx){
+      {/* Par onduleur */}
+      {data.onduleurs.map((ond,idx)=>{
+        const sc=ond.etat==="OK"?G:ond.etat==="Erreur"?RD:MU;
         return(
           <div key={idx} className="page-break" style={{marginBottom:20}}>
-            <div style={{fontSize:13,fontWeight:700,color:WHITE,background:GREEN,
-              borderRadius:"8px 8px 0 0",padding:"8px 14px",display:"flex",alignItems:"center",gap:10}}>
-              <span style={{width:24,height:24,borderRadius:"50%",background:"rgba(255,255,255,0.25)",
-                display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700}}>
-                {idx+1}
-              </span>
-              <span>{ond.modele||"Onduleur "+(idx+1)}</span>
-              {ond.serie&&<span style={{fontSize:11,fontWeight:400,opacity:0.8}}>S/N: {ond.serie}</span>}
+            <div style={{background:sc,color:W,borderRadius:"8px 8px 0 0",padding:"8px 14px",display:"flex",alignItems:"center",gap:10}}>
+              <span style={{width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.25)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700}}>{idx+1}</span>
+              <span style={{fontWeight:700}}>{ond.modele||"Onduleur "+(idx+1)}</span>
+              {ond.serie&&<span style={{fontSize:11,opacity:.8}}>S/N: {ond.serie}</span>}
+              {ond.etat&&<span style={{marginLeft:"auto",fontSize:12,fontWeight:700,background:"rgba(255,255,255,0.2)",padding:"1px 8px",borderRadius:4}}>{ond.etat}</span>}
             </div>
-            <div style={{border:`1px solid ${GREEN_MID}`,borderTop:"none",borderRadius:"0 0 8px 8px",padding:14}}>
-              {(ond.photoFiche&&ond.photoFiche.length>0||ond.emplacement)&&(
-                <div style={{display:"flex",gap:14,marginBottom:12,alignItems:"flex-start"}}>
-                  {ond.photoFiche&&ond.photoFiche.length>0&&(
-                    <img src={ond.photoFiche[0].url} alt="Fiche signalétique"
-                      style={{width:100,height:100,objectFit:"cover",borderRadius:6,border:`1px solid ${BORDER}`,flexShrink:0}}/>
+            <div style={{border:`1px solid ${sc}44`,borderTop:"none",borderRadius:"0 0 8px 8px",padding:12}}>
+              {/* Photo fiche + infos */}
+              <div style={{display:"flex",gap:12,marginBottom:10,alignItems:"flex-start"}}>
+                {ond.photoFiche&&ond.photoFiche.length>0&&<img src={ond.photoFiche[0].url} alt="Fiche" style={{width:90,height:90,objectFit:"cover",borderRadius:6,border:`1px solid ${BD}`,flexShrink:0}}/>}
+                <table className="pv-table" style={{flex:1}}><tbody>
+                  {ond.emplacement&&<tr><th>Emplacement</th><td>{ond.emplacement}</td></tr>}
+                  <tr><th>État</th><td style={{fontWeight:700,color:sc}}>{tv(ond.etat)}</td></tr>
+                  <tr><th>LEDs</th><td>
+                    {ond.ledVert&&<span style={{marginRight:8,color:G,fontWeight:600}}>● Vert ✓</span>}
+                    {ond.ledRouge&&<span style={{marginRight:8,color:RD,fontWeight:600}}>● Rouge {ond.ledRougeDesc?" — "+ond.ledRougeDesc:""}</span>}
+                    {ond.ledBleu&&<span style={{color:BL,fontWeight:600}}>● Bleu {ond.ledBleuDesc?" — "+ond.ledBleuDesc:""}</span>}
+                    {!ond.ledVert&&!ond.ledRouge&&!ond.ledBleu&&"—"}
+                  </td></tr>
+                  <tr><th>Mise à jour firmware</th><td>{ond.majFirmware==="OUI"?("OUI — "+(ond.firmwareVersion||"version non renseignée")):(ond.majFirmware||"—")}</td></tr>
+                  <tr><th>Redémarrage &gt;15 min</th><td style={{fontWeight:600,color:ond.redemarrage?G:MU}}>{ond.redemarrage?"✓ Attesté":"Non"}</td></tr>
+                </tbody></table>
+              </div>
+
+              {/* Rapport erreur si erreur */}
+              {ond.etat==="Erreur"&&(
+                <div style={{marginBottom:10}}>
+                  <table className="pv-table"><tbody>
+                    <tr><th>Description</th><td style={{whiteSpace:"pre-wrap"}}>{(ond.erreur&&ond.erreur.description)||"—"}</td></tr>
+                    <tr><th>Code erreur</th><td>{(ond.erreur&&ond.erreur.code)||"—"}</td></tr>
+                    <tr><th>Opérations</th><td style={{whiteSpace:"pre-wrap"}}>{(ond.erreur&&ond.erreur.operations)||"—"}</td></tr>
+                  </tbody></table>
+                  {ond.photosErreur&&ond.photosErreur.length>0&&(
+                    <div style={{marginTop:8,display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6}}>
+                      {ond.photosErreur.map((p,i)=><img key={i} src={p.url} alt={p.name} style={{width:"100%",aspectRatio:"4/3",objectFit:"cover",borderRadius:5,border:`1px solid ${BD}`}}/>)}
+                    </div>
                   )}
-                  {ond.emplacement&&<div style={{fontSize:12,color:MUTED}}><strong>Emplacement :</strong> {ond.emplacement}</div>}
                 </div>
               )}
-              <table className="preview-table"><tbody>
-                <tr><th>Description du problème</th><td style={{whiteSpace:"pre-wrap"}}>{ond.erreur.description||"—"}</td></tr>
-                <tr><th>LEDs</th><td>
-                  {ond.erreur.ledVert&&<span style={{marginRight:10,fontWeight:600,color:GREEN}}>● Vert: {ond.erreur.ledVert}</span>}
-                  {ond.erreur.ledRouge&&<span style={{marginRight:10,fontWeight:600,color:RED}}>● Rouge: {ond.erreur.ledRouge}</span>}
-                  {ond.erreur.ledBleu&&<span style={{fontWeight:600,color:BLUE}}>● Bleu: {ond.erreur.ledBleu}</span>}
-                  {!ond.erreur.ledVert&&!ond.erreur.ledRouge&&!ond.erreur.ledBleu&&"—"}
-                </td></tr>
-                <tr><th>Code / Message d'erreur</th><td>{ond.erreur.code||"—"}</td></tr>
-                <tr><th>Opérations réalisées</th><td style={{whiteSpace:"pre-wrap"}}>{ond.erreur.operations||"—"}</td></tr>
-                <tr><th>Redémarrage &gt;15 min</th>
-                  <td style={{fontWeight:600,color:ond.erreur.redemarrage?GREEN:MUTED}}>
-                    {ond.erreur.redemarrage?"✓ Attesté":"Non"}
-                  </td>
-                </tr>
-                {ond.erreur.firmware&&<tr><th>Firmware</th><td>{ond.erreur.firmware}</td></tr>}
-              </tbody></table>
-              {ond.photosErreur&&ond.photosErreur.length>0&&(
-                <div style={{marginTop:10}}>
-                  <div style={{fontSize:11,fontWeight:600,color:MUTED,marginBottom:6}}>Photos erreur / LEDs</div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
-                    {ond.photosErreur.map(function(p,i){
-                      return <img key={i} src={p.url} alt={p.name} style={{width:"100%",aspectRatio:"4/3",objectFit:"cover",borderRadius:6,border:`1px solid ${BORDER}`}}/>;
-                    })}
+
+              {/* AC */}
+              {(ond.ac&&Object.values(ond.ac).some(v=>v))&&(
+                <div style={{marginBottom:10}}>
+                  <div style={{fontSize:11,fontWeight:700,color:G,textTransform:"uppercase",marginBottom:6}}>Mesures AC</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <table className="pv-table"><tbody>
+                      {[["L1/PE","acL1pe"],["L2/PE","acL2pe"],["L3/PE","acL3pe"],["N/PE","acNpe"]].map(([l,k])=>(
+                        <tr key={k}><th>{l}</th><td>{(ond.ac&&ond.ac[k])?ond.ac[k]+" MΩ":"—"}</td></tr>
+                      ))}
+                    </tbody></table>
+                    <table className="pv-table"><tbody>
+                      {[["L1/N","vL1n"],["L2/N","vL2n"],["L3/N","vL3n"],["L1/L2","vL1L2"],["L2/L3","vL2L3"],["L1/L3","vL1L3"]].map(([l,k])=>(
+                        <tr key={k}><th>{l}</th><td>{(ond.ac&&ond.ac[k])?ond.ac[k]+" V":"—"}</td></tr>
+                      ))}
+                    </tbody></table>
                   </div>
+                  {ond.ac&&ond.ac.remarques&&<div style={{marginTop:6,fontSize:12,color:MU}}><strong>Remarques :</strong> {ond.ac.remarques}</div>}
                 </div>
               )}
+
+              {/* DC strings */}
+              {ond.strings&&ond.strings.some(s=>s.isolNeg||s.isolPos||s.voltMes)&&(
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:G,textTransform:"uppercase",marginBottom:6}}>Mesures DC — Strings</div>
+                  <table className="ms-table">
+                    <thead><tr><th>String</th><th>PE/− (MΩ)</th><th>PE/+ (MΩ)</th><th>Estimé (V)</th><th>Mesuré (V)</th><th>Statut</th></tr></thead>
+                    <tbody>
+                      {ond.strings.filter(s=>s.isolNeg||s.isolPos||s.voltMes).map((s,i)=>{
+                        const isolOk=parseFloat(s.isolNeg)>=0.5&&parseFloat(s.isolPos)>=0.5;
+                        const est=parseFloat(s.voltEst),mes=parseFloat(s.voltMes);
+                        const ecart=(!isNaN(est)&&!isNaN(mes)&&est!==0)?Math.abs((mes-est)/est*100).toFixed(1):null;
+                        const warn=ecart&&parseFloat(ecart)>5;
+                        return(
+                          <tr key={i}>
+                            <td style={{fontWeight:600}}>STR {s.num}</td>
+                            <td>{s.isolNeg||"—"}</td><td>{s.isolPos||"—"}</td>
+                            <td>{s.voltEst||"—"}</td>
+                            <td>{s.voltMes||"—"}{ecart&&<span style={{marginLeft:4,color:warn?RD:G,fontWeight:600}}>{ecart}%</span>}</td>
+                            <td><span style={{fontSize:10,fontWeight:700,color:W,background:(s.isolNeg&&s.isolPos)?(isolOk?G:RD):"#aaa",borderRadius:3,padding:"0 5px"}}>{(s.isolNeg&&s.isolPos)?(isolOk?"OK":"⚠"):"—"}</span></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {ond.stringsOk&&<div style={{marginTop:6,fontSize:12,fontWeight:600,color:G}}>✓ Toutes les mesures DC sont conformes</div>}
+                  {ond.dcRemarques&&<div style={{marginTop:4,fontSize:12,color:MU}}><strong>Remarques :</strong> {ond.dcRemarques}</div>}
+                </div>
+              )}
+              {ond.stringsOk&&(!ond.strings||!ond.strings.some(s=>s.isolNeg||s.isolPos||s.voltMes))&&(
+                <div style={{fontSize:12,fontWeight:600,color:G}}>✓ Strings OK — mesures conformes</div>
+              )}
+
             </div>
           </div>
         );
       })}
 
-      {/* Photos AC/DC/générales */}
-      {[{key:"ac",label:"Photos AC"},{key:"dc",label:"Photos DC"},{key:"general",label:"Photos générales"}]
-        .filter(function(s){return data.photos[s.key]&&data.photos[s.key].length>0;})
-        .map(function(section){
-          return(
-            <div key={section.key} style={{marginBottom:16}}>
-              <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>{section.label}</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
-                {data.photos[section.key].map(function(p,i){
-                  return <img key={i} src={p.url} alt={p.name} style={{width:"100%",aspectRatio:"4/3",objectFit:"cover",borderRadius:6,border:`1px solid ${BORDER}`}}/>;
-                })}
-              </div>
-            </div>
-          );
-        })}
+      {/* Photos générales */}
+      {data.photos.general&&data.photos.general.length>0&&(
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:12,fontWeight:600,marginBottom:8}}>Photos générales</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
+            {data.photos.general.map((p,i)=><img key={i} src={p.url} alt={p.name} style={{width:"100%",aspectRatio:"4/3",objectFit:"cover",borderRadius:6,border:`1px solid ${BD}`}}/>)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── App ────────────────────────────────────────────────────────────────────
+/* ── App ── */
 function mkOnd(n){
-  return{
-    id:Date.now()+n,
-    modele:"",serie:"",emplacement:"",
-    photoFiche:[],photosErreur:[],
-    erreur:{description:"",ledVert:"",ledRouge:"",ledBleu:"",code:"",operations:"",redemarrage:false,firmware:""}
-  };
+  return{id:Date.now()+n,modele:"",serie:"",emplacement:"",photoFiche:[],photosErreur:[],photosAc:[],photosDc:[],
+    etat:null,ledVert:"",ledRouge:"",ledBleu:"",ledRougeDesc:"",ledBleuDesc:"",
+    majFirmware:null,firmwareVersion:"",redemarrage:false,stringsOk:false,
+    ac:{},strings:[{num:"1",isolNeg:"",isolPos:"",voltEst:"",voltMes:""}],dcRemarques:"",
+    erreur:{description:"",code:"",operations:""}};
 }
 
 function App(){
-  var [mode,setMode]=useState("form");
-  var [ref,setRef]=useState("");
-  var [saveStatus,setSaveStatus]=useState("");
-  var [lastSaved,setLastSaved]=useState(null);
-  var saveTimer=useRef(null);
-  var isLoading=useRef(false);
+  const [mode,setMode]=useState("form");
+  const [ref,setRef]=useState("");
+  const [saveStatus,setSaveStatus]=useState("");
+  const [lastSaved,setLastSaved]=useState(null);
+  const saveTimer=useRef(null);
+  const isLoading=useRef(false);
 
-  var [meta,setMeta]=useState({adresse:"",responsable:"",date:""});
-  var initAc={
-    isol:{l1pe:"",l2pe:"",l3pe:"",npe:""},
-    volt:{l1n:"",l2n:"",l3n:"",l1pe_v:"",l2pe_v:"",l3pe_v:"",npe_v:"",l1l2:"",l2l3:"",l1l3:""},
-    remarques:""
-  };
-  var [ac,setAc]=useState(initAc);
-  var mkStr=function(n){return{num:String(n),isolNeg:"",isolPos:"",voltEst:"",voltMes:""};};
-  var [strings,setStrings]=useState([1,2,3,4,5].map(mkStr));
-  var [dcRemarques,setDcRemarques]=useState("");
-  var [onduleurs,setOnduleurs]=useState([mkOnd(0)]);
-  var [photos,setPhotos]=useState({ac:[],dc:[],general:[]});
+  const [meta,setMeta]=useState({client:"",adresse:"",responsable:"",date:""});
+  const [onduleurs,setOnduleurs]=useState([mkOnd(0)]);
+  const [photos,setPhotos]=useState({general:[]});
 
-  var data={meta,ac,strings,dcRemarques,onduleurs,photos};
+  const data={meta,onduleurs,photos};
 
-  // Load
-  useEffect(function(){
-    var urlRef=new URLSearchParams(window.location.search).get("ref");
+  useEffect(()=>{
+    const urlRef=new URLSearchParams(window.location.search).get("ref");
     if(!urlRef)return;
     setRef(urlRef);setSaveStatus("loading");
-    supaLoad(urlRef).then(function(row){
-      if(!row||!row.data){setSaveStatus("");return;}
+    supaLoad(urlRef).then(row=>{
+      if(!row?.data){setSaveStatus("");return;}
       isLoading.current=true;
-      var d=row.data;
+      const d=row.data;
       if(d.meta)setMeta(d.meta);
-      if(d.ac)setAc(d.ac);
-      if(d.strings)setStrings(d.strings);
-      if(d.dcRemarques!==undefined)setDcRemarques(d.dcRemarques);
       if(d.onduleurs)setOnduleurs(d.onduleurs);
       if(d.photos)setPhotos(d.photos);
       setLastSaved(row.updated_at);setSaveStatus("saved");
-      setTimeout(function(){isLoading.current=false;},100);
+      setTimeout(()=>{isLoading.current=false;},100);
     });
   },[]);
 
-  // Auto-save
-  var doSave=function(delay){
+  const doSave=delay=>{
     if(!ref||isLoading.current)return;
     if(saveTimer.current)clearTimeout(saveTimer.current);
     setSaveStatus("saving");
-    saveTimer.current=setTimeout(function(){
-      supaSave(ref,data).then(function(ok){
+    saveTimer.current=setTimeout(()=>{
+      supaSave(ref,data).then(ok=>{
         if(ok){setLastSaved(new Date().toISOString());setSaveStatus("saved");}
         else setSaveStatus("error");
       });
     },delay||1400);
   };
+  useEffect(()=>doSave(1400),[meta,onduleurs]);
+  useEffect(()=>doSave(2000),[photos]);
 
-  useEffect(function(){doSave(1400);},[meta,ac,strings,dcRemarques,onduleurs]);
-  useEffect(function(){doSave(2000);},[photos]);
+  const updOnd=(i,val)=>setOnduleurs(p=>p.map((o,idx)=>idx===i?val:o));
+  const addOnd=()=>setOnduleurs(p=>[...p,mkOnd(p.length)]);
+  const delOnd=i=>setOnduleurs(p=>p.filter((_,idx)=>idx!==i));
+  const addPhotos=(key,items)=>setPhotos(p=>({...p,[key]:p[key].concat(items)}));
+  const delPhoto=(key,i)=>setPhotos(p=>({...p,[key]:p[key].filter((_,idx)=>idx!==i)}));
 
-  var addPhotos=function(key,items){setPhotos(function(p){return{...p,[key]:p[key].concat(items)};});};
-  var delPhoto=function(key,i){setPhotos(function(p){return{...p,[key]:p[key].filter(function(_,idx){return idx!==i;})};});};
-
-  var setAcIsol=function(k,v){setAc(function(p){return{...p,isol:{...p.isol,[k]:v}};});};
-  var setAcVolt=function(k,v){setAc(function(p){return{...p,volt:{...p.volt,[k]:v}};});};
-  var updStr=function(i,k,v){setStrings(function(p){return p.map(function(r,idx){return idx===i?{...r,[k]:v}:r;});});};
-  var addStr=function(){setStrings(function(p){return p.concat([mkStr(p.length+1)]);});};
-  var delStr=function(i){setStrings(function(p){return p.filter(function(_,idx){return idx!==i;});});};
-
-  var updOnd=function(i,val){setOnduleurs(function(p){return p.map(function(o,idx){return idx===i?val:o;});});};
-  var addOnd=function(){setOnduleurs(function(p){return p.concat([mkOnd(p.length)]);});};
-  var delOnd=function(i){setOnduleurs(function(p){return p.filter(function(_,idx){return idx!==i;});});};
-
-  var saveLabel=function(){
+  const saveLabel=()=>{
     if(saveStatus==="saving")return"⏳ Sauvegarde…";
     if(saveStatus==="loading")return"⏳ Chargement…";
     if(saveStatus==="error")return"⚠ Erreur de sauvegarde";
     if(saveStatus==="saved"&&lastSaved){
-      var diff=Math.round((new Date()-new Date(lastSaved))/1000);
+      const diff=Math.round((new Date()-new Date(lastSaved))/1000);
       if(diff<60)return"✓ Sauvegardé";
       return"✓ "+new Date(lastSaved).toLocaleTimeString("fr-BE",{hour:"2-digit",minute:"2-digit"});
     }
     return"";
   };
-
-  var btnSt=function(active){return{
-    padding:"7px 16px",borderRadius:7,
-    background:active?GREEN_LIGHT:WHITE,color:active?GREEN:MUTED,
-    border:`1px solid ${active?GREEN_MID:BORDER}`,
-    fontSize:13,fontWeight:active?600:400,cursor:"pointer"
-  };};
-
-  var thTd={fontWeight:500,padding:"6px 10px",border:`1px solid ${BORDER}`,width:"30%"};
-  var tdSt={padding:"4px 8px",border:`1px solid ${BORDER}`,textAlign:"center"};
+  const btnSt=active=>({padding:"7px 16px",borderRadius:7,background:active?GL:W,color:active?G:MU,border:`1px solid ${active?GM:BD}`,fontSize:13,fontWeight:active?600:400,cursor:"pointer"});
 
   return(
-    <div style={{maxWidth:960,margin:"0 auto",padding:"1rem .75rem",display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{maxWidth:980,margin:"0 auto",padding:"1rem .75rem",display:"flex",flexDirection:"column",gap:14}}>
 
-      {/* Header */}
       <div id="no-print" style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
         <div>
-          <div style={{fontSize:11,fontWeight:700,color:GREEN,textTransform:"uppercase",letterSpacing:"0.08em"}}>We Green Energy</div>
+          <div style={{fontSize:11,fontWeight:700,color:G,textTransform:"uppercase",letterSpacing:"0.08em"}}>We Green Energy</div>
           <div style={{fontSize:20,fontWeight:700}}>
             Maintenance Onduleur
-            {ref&&<span style={{fontSize:14,fontWeight:400,color:MUTED,marginLeft:10}}>— {ref}</span>}
+            {ref&&<span style={{fontSize:14,fontWeight:400,color:MU,marginLeft:10}}>— {ref}</span>}
           </div>
-          {!ref&&<div style={{fontSize:11,color:ORANGE,marginTop:2}}>⚠ Ajoutez ?ref=S0XXXX dans l'URL pour activer la sauvegarde</div>}
-          {ref&&<div style={{fontSize:11,marginTop:2,color:saveStatus==="error"?RED:saveStatus==="saved"?GREEN:MUTED}}>{saveLabel()}</div>}
+          {!ref&&<div style={{fontSize:11,color:OR,marginTop:2}}>⚠ Ajoutez ?ref=S0XXXX dans l'URL pour activer la sauvegarde</div>}
+          {ref&&<div style={{fontSize:11,marginTop:2,color:saveStatus==="error"?RD:saveStatus==="saved"?G:MU}}>{saveLabel()}</div>}
         </div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-          <div style={{display:"flex",border:`1px solid ${BORDER}`,borderRadius:8,overflow:"hidden"}}>
-            <button onClick={function(){setMode("form");}} style={{...btnSt(mode==="form"),borderRadius:0,border:"none",borderRight:`1px solid ${BORDER}`}}>Formulaire</button>
-            <button onClick={function(){setMode("preview");}} style={{...btnSt(mode==="preview"),borderRadius:0,border:"none"}}>Aperçu</button>
+          <div style={{display:"flex",border:`1px solid ${BD}`,borderRadius:8,overflow:"hidden"}}>
+            <button onClick={()=>setMode("form")} style={{...btnSt(mode==="form"),borderRadius:0,border:"none",borderRight:`1px solid ${BD}`}}>Formulaire</button>
+            <button onClick={()=>setMode("preview")} style={{...btnSt(mode==="preview"),borderRadius:0,border:"none"}}>Aperçu</button>
           </div>
-          {mode==="preview"&&<button onClick={function(){window.print();}} style={btnSt(false)}>⬇ PDF</button>}
+          {mode==="preview"&&<button onClick={()=>window.print()} style={btnSt(false)}>⬇ PDF</button>}
         </div>
       </div>
 
       {mode==="preview"?<PreviewDoc data={data}/>:(
-
         <React.Fragment>
 
-          {/* Identification projet */}
+          {/* Identification */}
           <div style={CARD}>
             <div style={SH}>Identification du projet</div>
             <div style={G2}>
-              <Field label="Adresse du chantier" value={meta.adresse} onChange={function(v){setMeta(function(p){return{...p,adresse:v};});}} placeholder="Rue, numéro, CP, ville"/>
-              <Field label="Responsable de la mesure" value={meta.responsable} onChange={function(v){setMeta(function(p){return{...p,responsable:v};});}} placeholder="Prénom Nom"/>
-              <Field label="Date d'intervention" value={meta.date} onChange={function(v){setMeta(function(p){return{...p,date:v};});}} type="date"/>
+              <Field label="Nom du client" value={meta.client} onChange={v=>setMeta(p=>({...p,client:v}))} placeholder="Société ou particulier"/>
+              <Field label="Adresse du chantier" value={meta.adresse} onChange={v=>setMeta(p=>({...p,adresse:v}))} placeholder="Rue, numéro, CP, ville"/>
+              <Field label="Responsable de la mesure" value={meta.responsable} onChange={v=>setMeta(p=>({...p,responsable:v}))} placeholder="Prénom Nom"/>
+              <Field label="Date d'intervention" value={meta.date} onChange={v=>setMeta(p=>({...p,date:v}))} type="date"/>
             </div>
           </div>
 
-          {/* Mesures AC */}
-          <div style={CARD}>
-            <div style={SH}>Mesures AC (installation)</div>
-            <div style={{...G2,marginBottom:14}}>
-              <div>
-                <div style={{fontSize:12,fontWeight:600,color:MUTED,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:8}}>
-                  Isolement AC <span style={{fontSize:10,fontWeight:400}}>(seuil &gt; 0,5 MΩ = OK)</span>
-                </div>
-                <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <tbody>
-                    {[["L1 / PE","l1pe"],["L2 / PE","l2pe"],["L3 / PE","l3pe"],["N / PE","npe"]].map(function(pair){
-                      var lbl=pair[0],k=pair[1],val=ac.isol[k];
-                      var ok=val&&parseFloat(val)>=0.5;
-                      return(
-                        <tr key={k}>
-                          <td style={thTd}>{lbl}</td>
-                          <td style={{padding:"4px 8px",border:`1px solid ${BORDER}`}}>
-                            <div style={{display:"flex",alignItems:"center",gap:6}}>
-                              <input type="number" step="any" value={val}
-                                onChange={function(e){setAcIsol(k,e.target.value);}}
-                                placeholder="—" style={{width:80,textAlign:"right"}}/>
-                              <span style={{fontSize:12,color:MUTED}}>MΩ</span>
-                              {val&&<span style={{fontSize:11,fontWeight:700,color:WHITE,
-                                background:ok?GREEN:RED,borderRadius:4,padding:"1px 5px"}}>{ok?"OK":"⚠"}</span>}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div>
-                <div style={{fontSize:12,fontWeight:600,color:MUTED,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:8}}>Voltage AC</div>
-                <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <tbody>
-                    {[["L1/N","l1n"],["L2/N","l2n"],["L3/N","l3n"],
-                      ["L1/PE","l1pe_v"],["L2/PE","l2pe_v"],["L3/PE","l3pe_v"],
-                      ["N/PE","npe_v"],["L1/L2","l1l2"],["L2/L3","l2l3"],["L1/L3","l1l3"]
-                    ].map(function(pair){
-                      var lbl=pair[0],k=pair[1];
-                      return(
-                        <tr key={k}>
-                          <td style={thTd}>{lbl}</td>
-                          <td style={{padding:"4px 8px",border:`1px solid ${BORDER}`}}>
-                            <div style={{display:"flex",alignItems:"center",gap:6}}>
-                              <input type="number" step="any" value={ac.volt[k]}
-                                onChange={function(e){setAcVolt(k,e.target.value);}}
-                                placeholder="—" style={{width:80,textAlign:"right"}}/>
-                              <span style={{fontSize:12,color:MUTED}}>V</span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,alignItems:"start"}}>
-              <div>
-                <label style={LBL}>Remarques AC</label>
-                <textarea value={ac.remarques} onChange={function(e){setAc(function(p){return{...p,remarques:e.target.value};});}}
-                  rows={3} style={{width:"100%",resize:"vertical"}} placeholder="Observations…"/>
-              </div>
-              <PhotoZone label="Photos AC" items={photos.ac} onAdd={function(items){addPhotos("ac",items);}} onDelete={function(i){delPhoto("ac",i);}}/>
-            </div>
-          </div>
-
-          {/* DC Strings */}
-          <div style={CARD}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={SH}>Mesures DC — Strings</div>
-              <button onClick={addStr} style={{fontSize:12,color:GREEN,background:"none",border:`1px dashed ${GREEN_MID}`,borderRadius:6,padding:"4px 12px",cursor:"pointer",marginBottom:14}}>+ String</button>
-            </div>
-            <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",minWidth:540}}>
-                <thead>
-                  <tr style={{background:GREEN}}>
-                    {["String","PE/− (MΩ)","PE/+ (MΩ)","Tension estimée (V)","Tension mesurée (V)",""].map(function(h,i){
-                      return <th key={i} style={{color:WHITE,padding:"7px 10px",textAlign:i===0?"left":"center",fontSize:12,fontWeight:700,width:i===5?36:undefined}}>{h}</th>;
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {strings.map(function(s,i){
-                    var est=parseFloat(s.voltEst),mes=parseFloat(s.voltMes);
-                    var ecart=(!isNaN(est)&&!isNaN(mes)&&est!==0)?Math.abs((mes-est)/est*100).toFixed(1):null;
-                    var warn=ecart&&parseFloat(ecart)>5;
-                    return(
-                      <tr key={i} style={{background:i%2===0?WHITE:"#fafaf8"}}>
-                        <td style={{padding:"6px 8px",border:`1px solid ${BORDER}`}}>
-                          <input type="text" value={s.num} onChange={function(e){updStr(i,"num",e.target.value);}}
-                            style={{width:50,fontWeight:700,color:GREEN,textAlign:"center"}} placeholder={String(i+1)}/>
-                        </td>
-                        {[["isolNeg"],["isolPos"]].map(function(pair){
-                          var k=pair[0],val=s[k],ok=val&&parseFloat(val)>=0.5;
-                          return(
-                            <td key={k} style={tdSt}>
-                              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-                                <input type="number" step="any" value={val} onChange={function(e){updStr(i,k,e.target.value);}}
-                                  style={{width:70,textAlign:"right"}} placeholder="—"/>
-                                <span style={{fontSize:11,color:MUTED}}>MΩ</span>
-                                {val&&<span style={{fontSize:10,fontWeight:700,color:ok?GREEN:RED}}>{ok?"✓":"⚠"}</span>}
-                              </div>
-                            </td>
-                          );
-                        })}
-                        <td style={tdSt}>
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-                            <input type="number" step="any" value={s.voltEst} onChange={function(e){updStr(i,"voltEst",e.target.value);}}
-                              style={{width:70,textAlign:"right"}} placeholder="—"/>
-                            <span style={{fontSize:11,color:MUTED}}>V</span>
-                          </div>
-                        </td>
-                        <td style={tdSt}>
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-                            <input type="number" step="any" value={s.voltMes} onChange={function(e){updStr(i,"voltMes",e.target.value);}}
-                              style={{width:70,textAlign:"right"}} placeholder="—"/>
-                            <span style={{fontSize:11,color:MUTED}}>V</span>
-                            {ecart&&<span style={{fontSize:10,fontWeight:700,color:warn?RED:GREEN}}>{ecart}%</span>}
-                          </div>
-                        </td>
-                        <td style={{padding:"4px",border:`1px solid ${BORDER}`,textAlign:"center"}}>
-                          <button onClick={function(){delStr(i);}} style={{fontSize:16,color:MUTED,background:"none",border:"none",cursor:"pointer"}}>x</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div style={{marginTop:6,fontSize:11,color:MUTED}}>Isolement : seuil &gt; 0,5 MΩ = OK · Tension : écart &gt; 5% = rouge</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginTop:14,alignItems:"start"}}>
-              <div>
-                <label style={LBL}>Remarques DC</label>
-                <textarea value={dcRemarques} onChange={function(e){setDcRemarques(e.target.value);}}
-                  rows={3} style={{width:"100%",resize:"vertical"}} placeholder="Observations DC…"/>
-              </div>
-              <PhotoZone label="Photos DC" items={photos.dc} onAdd={function(items){addPhotos("dc",items);}} onDelete={function(i){delPhoto("dc",i);}}/>
-            </div>
-          </div>
-
-          {/* Rapports par onduleur */}
+          {/* Onduleurs */}
           <div style={CARD}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
               <div style={{...SH,marginBottom:0,paddingBottom:0,borderBottom:"none"}}>
-                Rapport d'erreur par onduleur
-                <span style={{marginLeft:10,fontSize:12,fontWeight:400,color:MUTED,textTransform:"none",letterSpacing:"normal"}}>
+                Onduleurs
+                <span style={{marginLeft:10,fontSize:12,fontWeight:400,color:MU,textTransform:"none",letterSpacing:"normal"}}>
                   {onduleurs.length} onduleur{onduleurs.length>1?"s":""}
+                  {onduleurs.filter(o=>o.etat==="OK").length>0&&<span style={{marginLeft:6,color:G,fontWeight:600}}>{onduleurs.filter(o=>o.etat==="OK").length} OK</span>}
+                  {onduleurs.filter(o=>o.etat==="Erreur").length>0&&<span style={{marginLeft:6,color:RD,fontWeight:600}}>{onduleurs.filter(o=>o.etat==="Erreur").length} en erreur</span>}
                 </span>
               </div>
-              <button onClick={addOnd}
-                style={{background:GREEN,color:WHITE,border:"none",borderRadius:8,padding:"7px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                + Onduleur
-              </button>
+              <button onClick={addOnd} style={{background:G,color:W,border:"none",borderRadius:8,padding:"7px 16px",fontSize:13,fontWeight:600,cursor:"pointer"}}>+ Onduleur</button>
             </div>
-            {onduleurs.map(function(ond,i){
-              return(
-                <RapportOnduleur key={ond.id||i} idx={i} ond={ond}
-                  onChange={function(val){updOnd(i,val);}}
-                  onDelete={function(){delOnd(i);}}/>
-              );
-            })}
+            {onduleurs.map((ond,i)=>(
+              <OnduleurCard key={ond.id||i} idx={i} ond={ond}
+                onChange={val=>updOnd(i,val)}
+                onDelete={()=>delOnd(i)}/>
+            ))}
           </div>
 
           {/* Photos générales */}
           <div style={CARD}>
             <div style={SH}>Photos générales / pièces jointes</div>
-            <div style={{fontSize:12,color:MUTED,marginBottom:10}}>Captures d'écran monitoring, journal, paramètres…</div>
-            <PhotoZone label="" items={photos.general} onAdd={function(items){addPhotos("general",items);}} onDelete={function(i){delPhoto("general",i);}}/>
+            <div style={{fontSize:12,color:MU,marginBottom:10}}>Captures d'écran monitoring, journal, paramètres…</div>
+            <PhotoZone label="" items={photos.general} onAdd={items=>addPhotos("general",items)} onDelete={i=>delPhoto("general",i)}/>
           </div>
 
         </React.Fragment>
